@@ -437,8 +437,10 @@ function cleanPet(p: unknown): Record<string, unknown> | null {
   const id = String(pp.id ?? '');
   // 有意过滤文件名非法字符（Windows 保留符 + 控制字符），防止配置值逃逸配置文件路径
   if (!id || id.length > 64 || ID_FORBIDDEN.test(id)) return null;
+  // size 下限与读路径一致（petNumber(..., min=1)）：写路径若放行 0.5，落盘后会被读取端判非法、
+  // 静默改回默认值——读写契约必须同一套阈值，否则用户看到的值会在刷新后自己变掉。
   const size = Number(pp.size);
-  if (!Number.isFinite(size) || size <= 0) return null;
+  if (!Number.isFinite(size) || size < 1) return null;
   // 显示名：可重复不校验唯一；缺失/留空/非字符串 → 按该宠物 id 处理（兼容旧配置）并告警
   let name = typeof pp.name === 'string' ? pp.name.trim() : '';
   if (!name) {
@@ -519,14 +521,33 @@ function passthrough(
   return out as Record<string, unknown> & { pets: unknown[] };
 }
 
-/** 归属表：实例 id → 它当前生效的条目（与读路径**同一套规则**，不重复实现合并语义） */
+/** 归属表：实例 id → 它当前生效的条目。
+ *  按 readAllConfig 的处理顺序（main 先、其后各文件按名排序）复刻同一套「先到者胜」语义：
+ *   - main 条目取合并后的实例（含内置默认那只——它本就合法归主条目）；
+ *   - 文件宠物条目**只认它自己文件里真正声明的 id**，且已被前面条目占用的 id 不再归它。
+ *  两条缺一不可：文件没写 pets（或声明的实例全被跳过）时 readAllConfig 会回退成内置默认实例
+ *  （id = main），那只是读时占位、不代表该文件拥有这个 id；若照单全收，一个只有顶层人设的
+ *  pack 文件就会劫持主宠归属，把主宠分流写进它，保存随即失败。 */
 function petOwners(paths: ConfigPaths): Map<string, string> {
+  // 每个文件宠物条目「自己声明的 id」集合（文件解析失败 = 空集，不参与归属）
+  const declared = new Map<string, Set<string>>();
+  for (const f of scanPetFiles(paths.petDir)) {
+    const raw = readJsonc(f.path);
+    const list = Array.isArray(raw?.pets) ? (raw.pets as Record<string, unknown>[]) : [];
+    declared.set(f.prefix, new Set(list.map((p) => String(p?.id ?? '')).filter(Boolean)));
+  }
+
   const owners = new Map<string, string>();
   for (const [entry, conf] of Object.entries(readAllConfig(paths))) {
     const list = Array.isArray(conf?.pets) ? (conf.pets as Record<string, unknown>[]) : [];
     for (const p of list) {
       const id = String(p?.id ?? '');
-      if (id) owners.set(id, entry);
+      if (!id || owners.has(id)) continue; // 已被前面的条目占用 → 本条目拿不到它（同 seenIds）
+      if (entry !== 'main') {
+        const own = declared.get(entry);
+        if (!own || !own.has(id)) continue; // 该文件没声明这个 id → 读时回退的占位实例，不参与归属
+      }
+      owners.set(id, entry);
     }
   }
   return owners;
@@ -538,7 +559,8 @@ function petOwners(paths: ConfigPaths): Map<string, string> {
  * 归属规则（唯一规则，与 readAllConfig 的条目划分一致）：
  *   - id 当前生效于某个文件宠物条目 → 写回**那个 pet/<前缀>-config.json**（顶层字段透传保留）；
  *   - 其余（main 条目实例、以及设置页新建、尚未落盘的实例）→ 写进 main-config.json。
- * 未收到任何实例的条目**不进计划**（宿主不动该文件）；主条目同理（main = null）。
+ * 未收到任何实例的条目**不进计划**（宿主不动该文件）；主条目同理（main = null）——
+ * 但全局开关只归主条目，所以「带了全局开关却没有任何主条目实例」会被拒绝（客户端状态不一致）。
  *
  * 全局开关（notificationsEnabled / whisperImageEnabled / chatImageEnabled）只归主条目：
  * 请求体传了才写，未传则透传磁盘旧值（不凭空造字段，也不把既有设置抹成默认）。
@@ -556,9 +578,15 @@ export function planConfigSave(paths: ConfigPaths, raw: unknown): ConfigSavePlan
   }
 
   const cleaned: Record<string, unknown>[] = [];
+  const seenIds = new Set<string>();
   for (const p of arr) {
     const c = cleanPet(p);
     if (!c) return null; // 一票否决：非法实例与合法实例混合时也整份拒绝
+    // id 必须全局唯一：读取端（mergePet 的 seenIds）遇到重复 id 会直接丢掉后一只，
+    // 放行等于让用户的一部分配置在下次加载时静默消失。
+    const id = String(c.id);
+    if (seenIds.has(id)) return null;
+    seenIds.add(id);
     cleaned.push(c);
   }
 
@@ -592,14 +620,15 @@ export function planConfigSave(paths: ConfigPaths, raw: unknown): ConfigSavePlan
     for (const d of diskPets) {
       const id = String(d?.id ?? '');
       const s = submitted.get(id);
-      if (s) {
-        merged.push(s); // 提交值覆盖（同 id）
-        submitted.delete(id);
-      } else {
-        merged.push(d); // 未提交 → 原样保留
-      }
+      // 提交值覆盖同 id（只消费一次：文件里若有重复 id 的第二只，它本来就会被加载跳过，
+      // 这里保持原样即可）；未提交的（多半是 id 非法/重复、被加载跳过的实例，设置页根本
+      // 看不到它）原样保留——不能因为「没提交」就把它从文件里删掉。
+      // 注意这里不需要「追加新实例」的分支：归属表只把**该文件自己声明过**的 id 记在它名下
+      // （见 petOwners），所以能进入本循环的 id 必然已在该文件的 pets 里；设置页新建的实例
+      // 一律归主条目（见 settings.ts 的 addPet）。
+      if (s) submitted.delete(id);
+      merged.push(s ?? d);
     }
-    for (const p of submitted.values()) merged.push(p); // 新实例追加末尾
     entries.push({ path: file.path, prefix, config: passthrough(disk, merged) });
   }
 

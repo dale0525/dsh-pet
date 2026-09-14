@@ -41,7 +41,7 @@ export const zh = {
   petsLabel: '宠物列表',
   fileBadge: '文件宠物',
   filePetsHint:
-    '带「{badge}」标记的宠物由 pet/ 目录的配置文件定义（<名>-config.json + <名>-animation/）：在这里的修改会写回**它自己那个文件**，动画池与文案原样保留；删除需直接改文件。',
+    '带「{badge}」标记的宠物由 pet/ 目录的配置文件定义（<名>-config.json + <名>-animation/）：在这里的修改会写回它自己那个文件，动画池与文案原样保留；删除需直接改文件。',
   add: '添加宠物',
   remove: '删除',
   removeFilePet: '文件宠物需直接删改它自己的配置文件，设置页不提供删除。',

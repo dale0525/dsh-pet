@@ -236,27 +236,25 @@ describe('planConfigSave —— 按 id 归属分流到各配置文件', () => {
   test('文件里被加载跳过的实例原样保留（设置页看不到它 → 保存不得顺手删掉）', () => {
     const { paths, packFile, done } = fixture();
     try {
-      // 手写一只 display 非法的实例：readAllConfig 校验不过会跳过它，设置页因此看不到它
+      // 手写一只**会被加载跳过**的实例：id 与前面那只重复（mergePet 的 seenIds 判重后才跳过；
+      // 注意 display 非法不会跳过——它只告警并取默认值，那种实例设置页是看得见的）。
       const raw = readBack(packFile) as { pets: Record<string, unknown>[] };
-      raw.pets.push({ ...raw.pets[0], id: 'broken1', name: '手写坏实例', display: 'screen' });
+      raw.pets.push({ ...raw.pets[0], name: '手写重复实例' }); // 同 id = dachshund1
       writeFileSync(packFile, JSON.stringify(raw));
 
       // 设置页只提交它看得见的那只（改了大小）
       const plan = planConfigSave(paths, { pets: [pet('dachshund1', { size: 411 })] });
       assert.ok(plan);
       const out = plan.entries[0].config.pets as Record<string, unknown>[];
-      assert.deepEqual(
-        out.map((p) => p.id),
-        ['dachshund1', 'broken1'],
-      );
-      assert.equal(out[1].display, 'screen'); // 原样保留，未被改写
+      assert.equal(out.length, 2); // 被跳过的第二只仍在文件里，没被顺手删掉
       assert.equal(out[0].size, 411); // 看得见的那只正常更新
+      assert.equal(out[1].name, '手写重复实例'); // 未被改写
     } finally {
       done();
     }
   });
 
-  test('同条目内新增实例追加在末尾，已见实例保持原顺序', () => {
+  test('同条目内已声明的多只实例：提交值覆盖同 id，其余按原顺序保留', () => {
     const { paths, packFile, done } = fixture();
     try {
       const raw = readBack(packFile) as { pets: Record<string, unknown>[] };
@@ -287,6 +285,65 @@ describe('planConfigSave —— 校验失败一律整体拒绝（宿主回 400�
       assert.equal(planConfigSave(paths, { pets: 'x' }), null);
       assert.equal(planConfigSave(paths, {}), null);
       assert.equal(planConfigSave(paths, { pets: [pet('main')], notificationsEnabled: 'yes' }), null);
+    } finally {
+      done();
+    }
+  });
+
+  test('提交列表内 id 重复 → 整份拒绝（放行会在下次加载时被去重丢掉一只）', () => {
+    const { paths, done } = fixture();
+    try {
+      assert.equal(planConfigSave(paths, { pets: [pet('main'), pet('main')] }), null);
+      assert.equal(planConfigSave(paths, { pets: [pet('dachshund1'), pet('dachshund1')] }), null);
+    } finally {
+      done();
+    }
+  });
+
+  test('size 必须 ≥1：0.5 会被读取端判非法并改回默认，写入端必须同样拒绝', () => {
+    const { paths, done } = fixture();
+    try {
+      // 读路径 petNumber(..., min=1)：0.5 落盘后会被读成默认值 → 写入端提前拒绝，避免读写不一致
+      assert.equal(planConfigSave(paths, { pets: [pet('main', { size: 0.5 })] }), null);
+      assert.equal(planConfigSave(paths, { pets: [pet('main', { size: 0 })] }), null);
+      assert.equal(planConfigSave(paths, { pets: [pet('main', { size: -3 })] }), null);
+      assert.ok(planConfigSave(paths, { pets: [pet('main', { size: 1 })] })); // 边界值放行
+    } finally {
+      done();
+    }
+  });
+
+  test('pack 文件声明的 id 与主宠撞名 → 主宠仍归主条目（先到者胜，同 seenIds）', () => {
+    const { paths, done } = fixture();
+    try {
+      // 该 pack 声明的实例 id 与主宠相同：读取端 seenIds 会丢掉它（main 先处理），
+      // 归属表必须同样判给主条目，否则主宠会被分流进 pack 文件、保存直接 400。
+      writeFileSync(join(paths.petDir, 'clash-config.json'), JSON.stringify({ pets: [pet('main')] }));
+      const plan = planConfigSave(paths, { pets: [pet('main', { size: 470 })], notificationsEnabled: true });
+      assert.ok(plan);
+      assert.deepEqual(
+        (plan.main?.pets as Record<string, unknown>[]).map((p) => p.id),
+        ['main'],
+      );
+      assert.deepEqual(plan.entries, []);
+    } finally {
+      done();
+    }
+  });
+
+  test('pack 文件没写 pets（回退成默认实例）→ 不劫持主宠归属，保存照常成功', () => {
+    const { paths, done } = fixture();
+    try {
+      // 手写一个只有顶层人设、没有 pets 的 pack 文件：readAllConfig 会让它回退成默认实例（id=main），
+      // 归属表若照单全收就会把真正的主宠 main 记到这个条目名下 —— 保存随即 400。
+      writeFileSync(join(paths.petDir, 'custom-config.json'), JSON.stringify({ whisperPrompt: '自定义人设' }));
+      const plan = planConfigSave(paths, { pets: [pet('main', { size: 470 })], notificationsEnabled: true });
+      assert.ok(plan, '保存不应失败');
+      assert.deepEqual(
+        (plan.main?.pets as Record<string, unknown>[]).map((p) => p.id),
+        ['main'],
+      );
+      assert.deepEqual(plan.entries, []); // 主宠没有被分流进 custom-config.json
     } finally {
       done();
     }
