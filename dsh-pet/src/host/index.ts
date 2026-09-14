@@ -39,7 +39,7 @@
  * （web=仅浏览器 / desktop=仅桌面 / both=两者 / none=都不显示；缺失时合并器填内置默认值）。
  *
  * 安全性：resolveAsset 做"防穿越"校验，保证路径仍在对应根目录内；
- *         PUT 保存经 saveUserConfig 白名单重建，id 过滤文件名非法字符。
+ *         PUT 保存经 planConfigSave 分流回写（主条目 / 各文件宠物条目），id 过滤文件名非法字符。
  *
  * TODO(类型)：peer 依赖类型包本地暂不可解析，ctx/req/res 暂用 any；
  *             依赖可解析后替换为 DSH 官方类型。
@@ -56,7 +56,7 @@ import { queryBalance } from './balance';
 import { generateWhisper } from './whisper';
 import { generateChat, type ChatMemoryMessage } from './chat';
 import { pickMeme, readMemePool } from './memes';
-import { findPetInstance, flattenPetList, readAllConfig, saveUserConfig, type ConfigPaths } from './config';
+import { findPetInstance, flattenPetList, planConfigSave, readAllConfig, type ConfigPaths } from './config';
 import {
   GOAL_UPDATE_TOOL,
   reduceWorkStatus,
@@ -135,7 +135,7 @@ async function sendFile(res: ServerResponse, file: string, contentType: string):
   stream.pipe(res);
 }
 
-// 配置的读取/校验/合并/保存全部收敛在 ./config（readAllConfig / saveUserConfig，host 自包含实现，
+// 配置的读取/校验/合并/保存全部收敛在 ./config（readAllConfig / planConfigSave，host 自包含实现，
 // 不 import src/shared —— DSH 单文件加载约束）。本文件不再保留任何配置逻辑，只消费成品返回值。
 
 /** 该宠物是否参与桌面模式（Electron 透明窗） */
@@ -618,17 +618,12 @@ export function apply(ctx: any): void {
       }
       if (method === 'PUT') {
         try {
-          const parsed = JSON.parse(body ?? '');
-          // 透传保留：读当前磁盘上的用户文件原对象，把非白名单顶层字段（physics/whisperPrompt/
-          // chatMemoryRounds/...）带回给 saveUserConfig——设置页保存不再抹掉用户手改的精调配置
-          let existing: Record<string, unknown> | undefined;
-          try {
-            existing = JSON.parse(await readFile(userConfigPath, 'utf8')) as Record<string, unknown>;
-          } catch {
-            /* 文件不存在/损坏：视为无既有用户字段，不阻塞保存 */
-          }
-          const clean = saveUserConfig(parsed, existing);
-          if (!clean) {
+          const parsed = JSON.parse(body ?? '') as unknown;
+          // 保存计划：设置页提交的是**完整宠物列表**（主条目实例 + 文件宠物实例混在一起），
+          // planConfigSave 按 id 归属分流到各自配置文件——文件宠物的顶层字段（whisperPrompt/
+          // workStatusTexts/animations…）从磁盘原文件透传保留，未涉及的条目一个字节都不动。
+          const plan = planConfigSave(configPaths, parsed);
+          if (!plan) {
             return {
               kind: 'json',
               status: 400,
@@ -638,8 +633,14 @@ export function apply(ctx: any): void {
               },
             };
           }
-          await mkdir(userRoot, { recursive: true });
-          await writeFile(userConfigPath, JSON.stringify(clean, null, 2), 'utf8');
+          // 先写文件宠物条目，再写主条目（主条目失败时前面已写入的条目仍是完整自洽的一份）
+          for (const entry of plan.entries) {
+            await writeFile(entry.path, JSON.stringify(entry.config, null, 2), 'utf8');
+          }
+          if (plan.main) {
+            await mkdir(userRoot, { recursive: true });
+            await writeFile(userConfigPath, JSON.stringify(plan.main, null, 2), 'utf8');
+          }
           syncDesktop(); // display 等可能变化：重解析桌面宠物并重启 Helper
           return { kind: 'json', status: 200, obj: { ok: true } };
         } catch {

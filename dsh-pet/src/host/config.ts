@@ -7,8 +7,9 @@
  *     逐字段合并后返回 **绝对正确** 的完成品聚合：
  *       { main: {...}, test1: {...}, ... }
  *     每个条目都是对应配置文件的原文结构（字段名/位置/嵌套一律不动），且所有字段已填满。
- *   - saveUserConfig()：设置页写盘（PUT /config），白名单重建用户层 main-config.json；
- *     与读取分离——写的是「可编辑层」，文件宠物永不回写、不进此模式。
+ *   - planConfigSave()：设置页写盘（PUT /config）的**保存计划**——把提交上来的完整宠物列表
+ *     按 id 归属分流：主条目实例（含新建）→ main-config.json，文件宠物实例 →
+ *     它自己那个 pet/<前缀>-config.json（顶层字段原样保留）。只返回计划，落盘由调用方执行。
  *
  * 合并规则（唯一规则）：
  *   - 内置默认配置是唯一默认值来源（「代码里的配置绝对正确」）；
@@ -429,86 +430,185 @@ export function findPetInstance(
   return undefined;
 }
 
+/** 白名单重建一只可编辑实例；任一字段非法 → null（整份提交作废，绝不写半份） */
+function cleanPet(p: unknown): Record<string, unknown> | null {
+  if (!p || typeof p !== 'object') return null;
+  const pp = p as Record<string, unknown>;
+  const id = String(pp.id ?? '');
+  // 有意过滤文件名非法字符（Windows 保留符 + 控制字符），防止配置值逃逸配置文件路径
+  if (!id || id.length > 64 || ID_FORBIDDEN.test(id)) return null;
+  const size = Number(pp.size);
+  if (!Number.isFinite(size) || size <= 0) return null;
+  // 显示名：可重复不校验唯一；缺失/留空/非字符串 → 按该宠物 id 处理（兼容旧配置）并告警
+  let name = typeof pp.name === 'string' ? pp.name.trim() : '';
+  if (!name) {
+    console.warn(`dsh-pet: pet「${id}」缺少 name，已按默认 ${id}（宠物 id）处理`);
+    name = id;
+  }
+  const balanceEnabled = pp.balanceEnabled;
+  if (typeof balanceEnabled !== 'boolean') return null;
+  const whisperEnabled = pp.whisperEnabled;
+  if (whisperEnabled !== undefined && typeof whisperEnabled !== 'boolean') return null;
+  const workStatusEnabled = pp.workStatusEnabled;
+  if (workStatusEnabled !== undefined && typeof workStatusEnabled !== 'boolean') return null;
+  const display = String(pp.display ?? '');
+  if (!PET_DISPLAY_SET.has(display)) return null;
+  const pos = pp.position && typeof pp.position === 'object' ? (pp.position as Record<string, unknown>) : {};
+  const corner = String(pos.corner ?? '');
+  if (!CORNER_SET.has(corner)) return null;
+  const marginX = Number(pos.marginX);
+  const marginY = Number(pos.marginY);
+  if (!Number.isFinite(marginX) || !Number.isFinite(marginY)) return null;
+  return {
+    id,
+    name,
+    size,
+    balanceEnabled,
+    whisperEnabled,
+    workStatusEnabled,
+    display,
+    position: { corner, marginX, marginY },
+  };
+}
+
+/** 一份写盘计划里的单个文件（内容 = 该文件的新全文） */
+export interface ConfigSaveFile {
+  /** 目标文件的绝对路径 */
+  path: string;
+  /** 条目 key（= 素材根；main-config.json 时为 'main'） */
+  prefix: string;
+  /** 写盘内容：非 pets 顶层字段已从磁盘原文件透传保留 */
+  config: Record<string, unknown>;
+}
+
+/** PUT /config 的保存计划：宿主照此逐文件落盘，未列出的文件一个字节都不动 */
+export interface ConfigSavePlan {
+  /** 主条目（main-config.json）新内容；**null = 本次提交不涉及主条目** */
+  main: (Record<string, unknown> & { pets: unknown[] }) | null;
+  /** 文件宠物条目：本条目被提交了实例，逐个文件给出新全文 */
+  entries: ConfigSaveFile[];
+}
+
+/** 全局开关白名单（顶层、不归宠物文件管）：请求体传了才算白名单字段，未传则透传磁盘旧值——
+ *  否则整包调用的调用方漏传一个开关，就会把用户既有设置悄悄抹成默认。 */
+const GLOBAL_SWITCHES = ['notificationsEnabled', 'whisperImageEnabled', 'chatImageEnabled'] as const;
+
+/** 从磁盘原对象透传保留非白名单顶层字段（physics / whisperPrompt / workStatusTexts / memes…），
+ *  再覆盖本次提交拥有的白名单字段——用户手改的精调配置不会被设置页保存抹掉。
+ *  `body` 只用于判定「哪些全局开关由本次提交决定」；文件宠物条目传 {}（全局开关不归它管）。 */
+function passthrough(
+  disk: Record<string, unknown> | undefined,
+  pets: unknown[],
+  body?: Record<string, unknown>,
+): Record<string, unknown> & { pets: unknown[] } {
+  const out: Record<string, unknown> = { pets };
+  const owned = new Set<string>(['pets']);
+  for (const key of GLOBAL_SWITCHES) {
+    if (body && body[key] !== undefined) owned.add(key);
+  }
+  if (disk && typeof disk === 'object') {
+    for (const key of Object.keys(disk)) {
+      if (owned.has(key)) continue; // 白名单字段由本次提交决定
+      // 只透传可精调的顶层字段，其余（如 memes/unknown/占位）一并保留，不丢弃用户内容
+      out[key] = disk[key];
+    }
+  }
+  for (const key of GLOBAL_SWITCHES) {
+    if (body && body[key] !== undefined) out[key] = body[key];
+  }
+  return out as Record<string, unknown> & { pets: unknown[] };
+}
+
+/** 归属表：实例 id → 它当前生效的条目（与读路径**同一套规则**，不重复实现合并语义） */
+function petOwners(paths: ConfigPaths): Map<string, string> {
+  const owners = new Map<string, string>();
+  for (const [entry, conf] of Object.entries(readAllConfig(paths))) {
+    const list = Array.isArray(conf?.pets) ? (conf.pets as Record<string, unknown>[]) : [];
+    for (const p of list) {
+      const id = String(p?.id ?? '');
+      if (id) owners.set(id, entry);
+    }
+  }
+  return owners;
+}
+
 /**
- * 保存用户层（PUT /config）：更新 main-config.json，接受可编辑字段（pets + 全局开关：
- * notificationsEnabled / whisperImageEnabled / chatImageEnabled）。
- * 编辑语义：**非白名单顶层字段（physics / whisperPrompt / chatMemoryRounds / eventsRefreshSec /
- * memes 等）从 `existing`（当前磁盘上的用户文件原对象）原样透传保留**——
- * 用户手动编辑的精调配置不会被设置页保存抹掉（旧实现是纯白名单重建，会整体覆盖丢失）。
- * 非法 → 返回 null（宿主回 400）。与读取分离——文件宠物永不回写、不在本模式内。
+ * 保存计划（PUT /config）：把设置页提交的**完整宠物列表**按 id 归属分流到各自的配置文件。
+ *
+ * 归属规则（唯一规则，与 readAllConfig 的条目划分一致）：
+ *   - id 当前生效于某个文件宠物条目 → 写回**那个 pet/<前缀>-config.json**（顶层字段透传保留）；
+ *   - 其余（main 条目实例、以及设置页新建、尚未落盘的实例）→ 写进 main-config.json。
+ * 未收到任何实例的条目**不进计划**（宿主不动该文件）；主条目同理（main = null）。
+ *
+ * 全局开关（notificationsEnabled / whisperImageEnabled / chatImageEnabled）只归主条目：
+ * 请求体传了才写，未传则透传磁盘旧值（不凭空造字段，也不把既有设置抹成默认）。
+ *
+ * 校验：任一实例字段非法、pets 为空、任一全局开关非布尔 → 整份返回 null（宿主回 400）。
+ * 这条「全有或全无」是有意的：绝不写出半份配置。
  */
-export function saveUserConfig(
-  raw: unknown,
-  existing?: Record<string, unknown>,
-): { pets: unknown[]; [key: string]: unknown } | null {
+export function planConfigSave(paths: ConfigPaths, raw: unknown): ConfigSavePlan | null {
   const o = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   const arr = Array.isArray(o.pets) ? o.pets : null;
   if (!arr || !arr.length) return null;
-  const out: unknown[] = [];
+  for (const key of GLOBAL_SWITCHES) {
+    const v = o[key];
+    if (v !== undefined && typeof v !== 'boolean') return null;
+  }
+
+  const cleaned: Record<string, unknown>[] = [];
   for (const p of arr) {
-    if (!p || typeof p !== 'object') return null;
-    const pp = p as Record<string, unknown>;
-    const id = String(pp.id ?? '');
-    // 有意过滤文件名非法字符（Windows 保留符 + 控制字符），防止配置值逃逸 main-config.json 路径
-    if (!id || id.length > 64 || ID_FORBIDDEN.test(id)) return null;
-    const size = Number(pp.size);
-    if (!Number.isFinite(size) || size <= 0) return null;
-    // 显示名：可重复不校验唯一；缺失/留空/非字符串 → 按该宠物 id 处理（兼容旧配置）并告警
-    let name = typeof pp.name === 'string' ? pp.name.trim() : '';
-    if (!name) {
-      console.warn(`dsh-pet: pet「${id}」缺少 name，已按默认 ${id}（宠物 id）处理`);
-      name = id;
-    }
-    const balanceEnabled = pp.balanceEnabled;
-    if (typeof balanceEnabled !== 'boolean') return null;
-    const whisperEnabled = pp.whisperEnabled;
-    if (whisperEnabled !== undefined && typeof whisperEnabled !== 'boolean') return null;
-    const workStatusEnabled = pp.workStatusEnabled;
-    if (workStatusEnabled !== undefined && typeof workStatusEnabled !== 'boolean') return null;
-    const display = String(pp.display ?? '');
-    if (!PET_DISPLAY_SET.has(display)) return null;
-    const pos = pp.position && typeof pp.position === 'object' ? (pp.position as Record<string, unknown>) : {};
-    const corner = String(pos.corner ?? '');
-    if (!CORNER_SET.has(corner)) return null;
-    const marginX = Number(pos.marginX);
-    const marginY = Number(pos.marginY);
-    if (!Number.isFinite(marginX) || !Number.isFinite(marginY)) return null;
-    out.push({
-      id,
-      name,
-      size,
-      balanceEnabled,
-      whisperEnabled,
-      workStatusEnabled,
-      display,
-      position: { corner, marginX, marginY },
-    });
+    const c = cleanPet(p);
+    if (!c) return null; // 一票否决：非法实例与合法实例混合时也整份拒绝
+    cleaned.push(c);
   }
-  const ne = o.notificationsEnabled;
-  if (ne !== undefined && typeof ne !== 'boolean') return null;
-  const wie = o.whisperImageEnabled;
-  if (wie !== undefined && typeof wie !== 'boolean') return null;
-  const cie = o.chatImageEnabled;
-  if (cie !== undefined && typeof cie !== 'boolean') return null;
-  // 白名单可编辑字段：pets 来自请求体、三个全局开关来自请求体（未传则不写）
-  const outConfig: { pets: unknown[]; [key: string]: unknown } = { pets: out };
-  if (ne !== undefined) outConfig.notificationsEnabled = ne;
-  if (wie !== undefined) outConfig.whisperImageEnabled = wie;
-  if (cie !== undefined) outConfig.chatImageEnabled = cie;
-  // 透传保留：请求体未携带的顶层字段，从 existing（磁盘现有用户文件）原样带回——
-  // 设置页只提交 pets(+全局开关)，手改的 physics/whisperPrompt/memes/... 借此保住。
-  // 全局开关只在「请求体传了」时才算白名单（已由上方写入）；未传时走这里透传磁盘旧值——
-  // 否则整包调用的调用方漏传一个开关，就会把用户既有设置悄悄抹成默认。
-  const bodyOwned = new Set(['pets']);
-  if (ne !== undefined) bodyOwned.add('notificationsEnabled');
-  if (wie !== undefined) bodyOwned.add('whisperImageEnabled');
-  if (cie !== undefined) bodyOwned.add('chatImageEnabled');
-  if (existing && typeof existing === 'object') {
-    for (const key of Object.keys(existing)) {
-      if (bodyOwned.has(key)) continue; // 白名单字段由请求体决定
-      // 只透传可精调的顶层字段，其余（如 memes/unknown/占位）一并保留，不丢弃用户内容
-      outConfig[key] = existing[key];
+
+  const owners = petOwners(paths);
+  // 条目 key → 文件（只有被提交实例的条目才进计划）
+  const files = new Map(scanPetFiles(paths.petDir).map((f) => [f.prefix, f]));
+  const mainPets: unknown[] = [];
+  const byPrefix = new Map<string, unknown[]>();
+  for (const p of cleaned) {
+    const entry = owners.get(String(p.id));
+    const file = entry !== undefined && entry !== 'main' ? files.get(entry) : undefined;
+    if (!file) {
+      mainPets.push(p);
+      continue;
     }
+    const list = byPrefix.get(file.prefix) ?? [];
+    list.push(p);
+    byPrefix.set(file.prefix, list);
   }
-  return outConfig;
+
+  const entries: ConfigSaveFile[] = [];
+  for (const [prefix, pets] of byPrefix) {
+    const file = files.get(prefix);
+    if (!file) continue; // 不可能：byPrefix 的 key 都来自 files
+    // 该条目在盘上的原文：既有实例按原顺序保留（未被提交的可能是校验不过被加载跳过的，
+    // 设置页根本看不到它——不能因为「没提交」就把它从文件里删掉），提交值覆盖同 id，新 id 追加末尾。
+    const disk = readJsonc(file.path);
+    const submitted = new Map(pets.map((p) => [String((p as Record<string, unknown>).id), p]));
+    const merged: unknown[] = [];
+    const diskPets = Array.isArray(disk?.pets) ? (disk.pets as Record<string, unknown>[]) : [];
+    for (const d of diskPets) {
+      const id = String(d?.id ?? '');
+      const s = submitted.get(id);
+      if (s) {
+        merged.push(s); // 提交值覆盖（同 id）
+        submitted.delete(id);
+      } else {
+        merged.push(d); // 未提交 → 原样保留
+      }
+    }
+    for (const p of submitted.values()) merged.push(p); // 新实例追加末尾
+    entries.push({ path: file.path, prefix, config: passthrough(disk, merged) });
+  }
+
+  // 主条目：有主条目实例才写（只带全局开关却不带主条目实例 = 客户端状态不一致，拒绝）
+  // 注意主条目是**整体替换**（不是像文件宠物那样保留未提交项）：设置页支持删除主条目实例，
+  // 「没提交」正是删除的表达，二者不可兼得——文件宠物则相反（设置页禁止删除，故必须保留）。
+  const anySwitch = GLOBAL_SWITCHES.some((k) => o[k] !== undefined);
+  let main: ConfigSavePlan['main'] = null;
+  if (mainPets.length > 0) main = passthrough(readJsonc(paths.userFile), mainPets, o);
+  else if (anySwitch) return null;
+  return { main, entries };
 }

@@ -14,7 +14,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { readAllConfig, saveUserConfig, type ConfigPaths } from './config.ts';
+import { planConfigSave, readAllConfig, type ConfigPaths } from './config.ts';
 
 /** 内置默认配置的完整最小形态（animations 整段必须合法——合并是整段替换/整段回退） */
 const BASE = {
@@ -167,14 +167,27 @@ function withBase(baseExtra: Record<string, unknown>, overlay?: Record<string, u
   return paths;
 }
 
-/** 跑一趟 saveUserConfig：返回写入用户层的对象（null = 被 sanitize 拒绝） */
+/** 跑一趟 planConfigSave 的主条目部分：返回写入 main-config.json 的对象（null = 被拒绝） */
 function saveOnce(body: Record<string, unknown>, existing?: Record<string, unknown>): Record<string, unknown> | null {
-  return saveUserConfig(body, existing) as Record<string, unknown> | null;
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-pet-config-save-'));
+  try {
+    const paths: ConfigPaths = {
+      defaultFile: join(dir, 'default.jsonc'),
+      userFile: join(dir, 'main-config.json'),
+      petDir: join(dir, 'pet'), // 不存在 = 无文件宠物，全部实例归主条目
+    };
+    writeFileSync(paths.defaultFile, JSON.stringify(BASE));
+    if (existing) writeFileSync(paths.userFile, JSON.stringify(existing));
+    const plan = planConfigSave(paths, body);
+    return (plan?.main ?? null) as Record<string, unknown> | null;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 const PETS = BASE.pets;
 
-describe('saveUserConfig —— 表情包配图开关（白名单 + 透传保留）', () => {
+describe('planConfigSave —— 表情包配图开关（白名单 + 透传保留）', () => {
   test('两个配图开关随请求体写入', () => {
     const out = saveOnce({ pets: PETS, whisperImageEnabled: true, chatImageEnabled: true });
     assert.equal(out?.whisperImageEnabled, true);

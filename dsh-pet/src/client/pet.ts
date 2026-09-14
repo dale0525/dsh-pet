@@ -1396,10 +1396,9 @@ export function makePetUI(rt: {
     // 共享碰撞站场（宠物间碰撞）：每只 PetCard 注册自己的槽位；飞行中的宠物在 startThrow
     // 每帧读数碰撞。纯 ref 同步，不触发 React 重渲染。
     const arenaRef = useRef<{ slots: Record<string, PetCollisionSlot> }>({ slots: {} });
-    // 文件宠物（非 main 条目的实例）：加载后填充；设置页 sync 过来的列表不含它们，这里统一合并回去
-    const extrasRef = useRef<Pet[]>([]);
-    // main 条目的条目级字段（设置页保存来的可编辑列表是裸实例，回填动画池/权重/周期用）
-    const mainConfRef = useRef<Record<string, unknown>>({});
+    // 每条目的条目级字段（设置页保存来的可编辑实例是裸实例，回填动画池/权重/周期/文案用）
+    // key = 条目 key（= assetRoot，'main' 或文件宠物前缀）
+    const entryConfRef = useRef<Record<string, Record<string, unknown>>>({});
     // 主条目刷新周期（余额轮询等全局节奏用；合并器已填内置默认）
     const mainRefreshRef = useRef<Record<string, number>>({});
     // 余额状态（容器统一拉取，PetCard 共享；balanceTick 每次成功拉取递增，驱动事件动画）
@@ -1421,32 +1420,31 @@ export function makePetUI(rt: {
           const merged = (await r.json()) as Record<string, Record<string, unknown>>;
           const flattened = flattenConfigPets(merged);
           if (!alive) return;
-          mainConfRef.current = merged.main ?? {};
+          // 每条目的条目级字段留一份：设置页保存送来的实例是裸实例（只有可编辑字段），
+          // 按 assetRoot 回填该条目的动画池/权重/周期/物理/文案——多实例共享同一份。
+          entryConfRef.current = merged;
           mainRefreshRef.current = (merged.main?.eventsRefreshSec as Record<string, number> | undefined) ?? {};
-          // 文件宠物单独留一份：设置页保存/恢复默认后自动合并回来
-          extrasRef.current = flattened.filter((p) => p.extra);
           petBridge.current = flattened;
-          // 「添加宠物」模板 = main 条目 pets[0]（内置默认或用户覆盖后的主宠物）
+          // 「添加宠物」模板 = main 条目 pets[0]（新宠物只并入主条目，绝不继承文件宠物的字段）
           petBridge.template = Array.isArray(merged.main?.pets)
             ? ((merged.main.pets as Pet[])[0] ?? undefined)
             : undefined;
           petBridge.sync = (list: Pet[]) => {
-            // 设置页编辑的是 main 条目实例（裸实例，无条目级字段）：这里补吹 main 的
-            // 动画池/权重/周期/物理参数/工作状态文案（与 flattenConfigPets 同规格——漏吹会让
-            // RuntimePet 的必填 physics 落空，新增或恢复默认的宠物一拖就在 cfg.physics 上抛错），
-            // 再合并文件宠物
-            const mc = mainConfRef.current;
-            const filled: Pet[] = list.map((p) => ({
-              ...p,
-              animations: mc.animations as Animations,
-              animationWeights: mc.animationWeights as Weights,
-              eventsRefreshSec: mc.eventsRefreshSec as Record<string, number>,
-              physics: mc.physics as PhysicsParams,
-              workStatusTexts: mc.workStatusTexts as string[][],
-              assetRoot: 'main',
-              extra: false,
-            }));
-            const next = [...filled, ...extrasRef.current];
+            // 设置页提交的是**完整列表**（含文件宠物），这里按 assetRoot 把每条目实例补齐条目级字段，
+            // 与 flattenConfigPets 同规格——保存后即时重渲染，无需刷新页面。
+            // 注意 physics / workStatusTexts 必须一并吹入：RuntimePet 把 physics 声明为必填，
+            // 漏吹会让新增或恢复默认的宠物一拖就在 cfg.physics 上抛错（见上游 22db345 的教训）。
+            const next: Pet[] = list.map((p) => {
+              const conf = entryConfRef.current[p.assetRoot ?? 'main'] ?? {};
+              return {
+                ...p,
+                animations: conf.animations as Animations,
+                animationWeights: conf.animationWeights as Weights,
+                eventsRefreshSec: conf.eventsRefreshSec as Record<string, number>,
+                physics: conf.physics as PhysicsParams,
+                workStatusTexts: conf.workStatusTexts as string[][],
+              };
+            });
             petBridge.current = next;
             setPets(next);
           };

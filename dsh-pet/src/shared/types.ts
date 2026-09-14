@@ -70,14 +70,12 @@ export interface Animations {
 }
 
 /** 一只宠物（与 jsonc pets[i] 同形，position 嵌套）。
- *  可选段（animations / animationWeights / extra / assetRoot / eventsRefreshSec / physics）为渲染期派生或
- *  「文件定义宠物」专用：
- *  - animations / animationWeights / eventsRefreshSec / physics：所属条目的条目级字段，由配置合并
- *    （host readAllConfig / 客户端 flattenConfigPets）在拍平时吹进每只实例——多实例共享；
- *  - extra: true 标记该宠物由 pet/ 目录文件定义：设置页不可编辑、保存时排除，
- *    由拍平逻辑统一打标，**永不出现在持久化配置里**；
- *  - assetRoot: 素材目录名（= 配置文件前缀 `<名>`，即 `pet/<名>-animation/`）；素材 URL
- *    用它而不是 id——多实例共享同一素材目录。main 等常规宠物并入 main 条目（assetRoot=main）。
+ *  可选段（animations / animationWeights / assetRoot / eventsRefreshSec / physics）为渲染期派生：
+ *  - animations / animationWeights / eventsRefreshSec / physics / workStatusTexts：所属条目的条目级字段，
+ *    由配置合并（host readAllConfig / 客户端 flattenConfigPets）在拍平时吹进每只实例——多实例共享；
+ *  - assetRoot: 所属**条目 key**（= 素材目录名 = 配置文件前缀 `<名>`，即 `pet/<名>-animation/`）；
+ *    素材 URL 用它而不是 id——多实例共享同一素材目录。主条目实例的 assetRoot = 'main'。
+ *    设置页按它把实例分流回各自配置文件。
  */
 export interface Pet {
   /** 唯一标识（程序定位用：素材/记忆/端点参数都按它；绝不重叠，冲突即配置错误） */
@@ -100,7 +98,7 @@ export interface Pet {
   position: { corner: Corner; marginX: number; marginY: number };
   animations?: Animations;
   animationWeights?: Weights;
-  extra?: boolean;
+  /** 所属条目 key（= 素材根；主条目为 'main'）：素材 URL 与设置页保存分流都用它 */
   assetRoot?: string;
   /** 渲染派生：所属条目的刷新周期（秒，事件名 → 间隔；合并时已填默认值） */
   eventsRefreshSec?: Record<string, number>;

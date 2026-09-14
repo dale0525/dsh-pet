@@ -216,7 +216,7 @@ $DSH_HOME/dsh-pet/
 - **动画池不回落全局**：`animations` / `animationWeights` 必须写全（缺失即配置错误）
 - 与主配置同构的约束：`pets` 每只字段完整合法、数组内 id 唯一、`animations` / `animationWeights` 结构校验同一套规则；`notificationsEnabled` / `eventsRefreshSec` 是全局属性，不归宠物文件管（写了忽略、不写不报错）
 - 配置非法 / 缺少 `-animation/` 目录 / 实例 id 与主宠物冲突 → 加载时显式报错并跳过（不影响其他宠物）
-- 设置页不列出文件宠物（改文件即生效，刷新可见；保存/恢复默认不会把它们写进 `main-config.json`）
+- 设置页**列出**文件宠物并可在其中编辑；保存时按 id **分流回写**各自的配置文件且原样保留其它顶层字段；文件宠物**不能在设置页删除**（需直接改文件；恢复默认不影响文件宠物）
 - 余额档位动画按各宠物自己的 `events.balance`
 
 ## 运行效果

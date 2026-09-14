@@ -1,16 +1,17 @@
 /**
  * 桌宠配置管理设置页（settings.section 插槽，id: pet-config）
  *
- * - 多开：管理多个桌宠，每个宠物独立 id/name/size/位置（corner + marginX/Y）
- * - 数据流：设置页持有「main 条目宠物列表」→ 保存时全量 PUT /dsh-pet-7340/config
- *   （写用户层 main-config.json = 可编辑层，文件宠物永不回写）
+ * - 多开：管理**全部**桌宠，每个宠物独立 id/name/size/位置（corner + marginX/Y）
+ * - 数据流：设置页持有完整宠物列表（主条目实例 + 文件宠物实例）→ 保存时全量 PUT /dsh-pet-7340/config，
+ *   host 按 id 归属把每只实例分流回**它自己所属的配置文件**（主条目 → main-config.json；
+ *   文件宠物 → pet/<前缀>-config.json，顶层字段透传保留）
  * - 数据入口：配置由 host readAllConfig 合并为**成品**（GET /dsh-pet-7340/config），
- *   设置页只读 main 条目（可编辑）+ 统计文件宠物条数，不做任何校验
+ *   设置页直接消费拍平后的列表，不做任何校验
  * - 即时生效：保存/恢复默认后调用 petBridge.sync 通知容器重新渲染，无需刷新页面
  *
  * 样式对齐官方设置页：max-width 720px、全走 --dsw-alias-* 语义 token（主题跟随）。
  */
-import { PET_DISPLAYS } from '../shared/config';
+import { PET_DISPLAYS, flattenConfigPets } from '../shared/config';
 import { NOTIFY_ICONS, reloadNotifications, requestNotificationPermission } from './notify';
 import type { Corner, Pet, PetDisplay } from '../shared/types';
 import type { ChangeEvent, CSSProperties, Dispatch, FunctionComponent, SetStateAction } from 'react';
@@ -19,7 +20,7 @@ import type { jsx } from 'react/jsx-runtime';
 
 /** 容器与设置页共享的桥（同一 bundle 单例）：
  * current=最新完整宠物列表（成品拍平，默认空）；sync=容器注册的重渲染回调（未注册时为无操作函数）；
- * template=main 条目的宠物[0]（「添加宠物」用它作为默认配置） */
+ * template=main 条目的宠物[0]（「添加宠物」用它作为默认配置——新宠物只并入主条目） */
 export const petBridge: {
   current: Pet[];
   sync: (pets: Pet[]) => void;
@@ -35,10 +36,15 @@ export const NS = 'pet.config';
 
 export const zh = {
   nav: '桌宠配置',
-  intro: '管理多个桌宠：每个宠物可独立设置大小与位置（保存后即时生效）。',
+  intro:
+    '管理全部桌宠：每个宠物可独立设置大小与位置（保存后即时生效）。由 pet/ 目录文件定义的宠物同样在此编辑，保存会写回它自己的配置文件。',
   petsLabel: '宠物列表',
+  fileBadge: '文件宠物',
+  filePetsHint:
+    '带「{badge}」标记的宠物由 pet/ 目录的配置文件定义（<名>-config.json + <名>-animation/）：在这里的修改会写回**它自己那个文件**，动画池与文案原样保留；删除需直接改文件。',
   add: '添加宠物',
   remove: '删除',
+  removeFilePet: '文件宠物需直接删改它自己的配置文件，设置页不提供删除。',
   confirmRemove: '确定删除宠物「{id}」吗？',
   confirmTitle: '确认操作',
   cancel: '取消',
@@ -81,8 +87,6 @@ export const zh = {
   loadError: '加载配置失败',
   invalid: '请检查输入：大小需为正数，边距可为任意数字。',
   busy: '保存中…',
-  extraPetsHint:
-    '另 {n} 只额外宠物由 pet/ 目录文件定义（<名>-config.json + <名>-animation/），它们不在此列表——改文件即生效，刷新可见。',
   notifyToggle: '系统通知',
   notifyToggleHint: '对话完成 / 生成失败 / 权限申请 / 用户选择，在窗口失焦时弹出系统级通知（桌面右下角）。',
   whisperImageToggle: '碎碎念配图',
@@ -117,10 +121,15 @@ export const zh = {
 
 export const en = {
   nav: 'Pet Config',
-  intro: 'Manage multiple pets: each pet has its own size and position (applies instantly after saving).',
+  intro:
+    'Manage every pet: each one has its own size and position (applied instantly on save). Pets defined by files in pet/ are edited here too — saving writes back to their own config file.',
   petsLabel: 'Pets',
+  fileBadge: 'file pet',
+  filePetsHint:
+    'Pets marked "{badge}" are defined by config files in pet/ (<name>-config.json + <name>-animation/): edits here are written back to their own file, keeping animation pools and texts intact. Delete them by editing that file directly.',
   add: 'Add pet',
   remove: 'Remove',
+  removeFilePet: 'File pets must be deleted by editing their own config file — the settings page does not remove them.',
   confirmRemove: 'Delete pet "{id}"?',
   confirmTitle: 'Confirm action',
   cancel: 'Cancel',
@@ -167,8 +176,6 @@ export const en = {
   loadError: 'Failed to load config',
   invalid: 'Check your input: size must be positive; margins can be any number.',
   busy: 'Saving…',
-  extraPetsHint:
-    '{n} extra pet(s) are file-defined in the pet/ directory (<name>-config.json + <name>-animation/). They are not in this list — edit the files, then refresh.',
   notifyToggle: 'System notifications',
   notifyToggleHint:
     'OS-level toasts (bottom-right of the desktop) for conversation completion, failures, permission requests, and questions — only while this window is unfocused.',
@@ -261,9 +268,8 @@ export function makePetConfigSection(rt: {
   };
 
   return function PetConfigSection() {
-    const initPets = petBridge.current.filter((p) => !p.extra);
-    // 文件定义宠物数量（pet/ 目录，不在本编辑列表；仅展示提示）
-    const extraCount = petBridge.current.filter((p) => p.extra).length;
+    // 全量列表（主条目实例 + 文件宠物实例）：两者都在此可编辑，保存时由 host 按 assetRoot 分流回写
+    const initPets = petBridge.current;
     const [pets, setPets] = useState<Pet[]>(initPets.map((p) => ({ ...p, position: { ...p.position } })));
     const [selId, setSelId] = useState<string>(initPets[0]?.id ?? '');
     const [busy, setBusy] = useState(false);
@@ -433,14 +439,18 @@ export function makePetConfigSection(rt: {
       setBusy(true);
       setMsg({ kind: '', text: '' });
       try {
-        // 删除用户层 → 重新拉成品（此时 main 条目 = 内置默认宠物列表）
+        // 删除用户层 → 重新拉成品（此时 main 条目 = 内置默认宠物列表；文件宠物不受影响）
         await fetch('/dsh-pet-7340/config', { method: 'DELETE' });
-        const merged = (await (await fetch('/dsh-pet-7340/config')).json()) as { main?: { pets?: Pet[] } } | null;
-        const defs = (merged?.main?.pets ?? []) as Pet[];
-        setPets(defs.map((p) => ({ ...p, position: { ...p.position } })));
-        setSelId(defs[0]?.id ?? '');
-        petBridge.current = defs;
-        petBridge.sync(defs);
+        const merged = (await (await fetch('/dsh-pet-7340/config')).json()) as Record<
+          string,
+          Record<string, unknown>
+        > | null;
+        // 与容器同一套拍平逻辑：重置后列表仍是「主条目实例 + 文件宠物实例」
+        const list = merged ? flattenConfigPets(merged) : [];
+        setPets(list.map((p) => ({ ...p, position: { ...p.position } })));
+        setSelId(list[0]?.id ?? '');
+        petBridge.current = list;
+        petBridge.sync(list);
         setMsg({ kind: 'ok', text: t('saved') });
       } catch {
         setMsg({ kind: 'err', text: t('loadError') });
@@ -465,13 +475,23 @@ export function makePetConfigSection(rt: {
           workStatusEnabled: tpl.workStatusEnabled,
           display: tpl.display,
           position: { ...tpl.position },
+          // 新宠物只并入主条目（host 按 id 归属：未知 id → main-config.json）
+          assetRoot: 'main',
         },
       ]);
       setSelId(id);
     };
 
+    /** 当前选中项是否为文件宠物（保存写回它自己的文件；删除需直接改文件） */
+    const curIsFilePet = !!cur && !!cur.assetRoot && cur.assetRoot !== 'main';
+
     const removeSel = () => {
-      if (pets.length <= 1) {
+      // 文件宠物的删除权在它自己的配置文件：设置页删掉只会让它下次刷新又出现（文件仍在）
+      if (curIsFilePet) {
+        setMsg({ kind: 'err', text: t('removeFilePet') });
+        return;
+      }
+      if (pets.filter((p) => p.assetRoot === 'main').length <= 1) {
         setMsg({ kind: 'err', text: t('atLeastOne') });
         return;
       }
@@ -517,8 +537,8 @@ export function makePetConfigSection(rt: {
           },
           children: t('intro'),
         }),
-        // 额外宠物提示（文件定义，不在此编辑列表）
-        extraCount > 0
+        // 文件宠物说明（带徽章的那些宠物：编辑会写回它们自己的文件）
+        pets.some((p) => p.assetRoot && p.assetRoot !== 'main')
           ? h('p', {
               style: {
                 margin: 0,
@@ -526,7 +546,7 @@ export function makePetConfigSection(rt: {
                 color: 'var(--dsw-alias-label-tertiary)',
                 lineHeight: '18px',
               },
-              children: t('extraPetsHint').replace('{n}', String(extraCount)),
+              children: t('filePetsHint').replace('{badge}', t('fileBadge')),
             })
           : null,
 
@@ -543,6 +563,10 @@ export function makePetConfigSection(rt: {
                 key: p.id,
                 type: 'button',
                 onClick: () => setSelId(p.id),
+                title:
+                  p.assetRoot && p.assetRoot !== 'main'
+                    ? t('filePetsHint').replace('{badge}', t('fileBadge'))
+                    : undefined,
                 style: {
                   border:
                     '1px solid ' +
@@ -554,7 +578,12 @@ export function makePetConfigSection(rt: {
                   fontSize: '13px',
                   cursor: 'pointer',
                 },
-                children: (p.name || p.id) + ' (' + p.size + 'px)',
+                children:
+                  (p.name || p.id) +
+                  ' (' +
+                  p.size +
+                  'px)' +
+                  (p.assetRoot && p.assetRoot !== 'main' ? ' · ' + t('fileBadge') : ''),
               }),
             ),
             h('button', {
@@ -784,8 +813,8 @@ export function makePetConfigSection(rt: {
                 h('button', {
                   type: 'button',
                   onClick: removeSel,
-                  disabled: busy,
-                  title: t('remove'),
+                  disabled: busy || curIsFilePet,
+                  title: curIsFilePet ? t('removeFilePet') : t('remove'),
                   style: {
                     alignSelf: 'flex-end',
                     border: '1px solid var(--dsw-alias-state-error-secondary)',
@@ -794,7 +823,8 @@ export function makePetConfigSection(rt: {
                     borderRadius: '8px',
                     padding: '4px 12px',
                     fontSize: '12px',
-                    cursor: 'pointer',
+                    cursor: curIsFilePet ? 'not-allowed' : 'pointer',
+                    opacity: curIsFilePet ? 0.4 : 1,
                   },
                   children: t('remove'),
                 }),

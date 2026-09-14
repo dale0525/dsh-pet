@@ -45,7 +45,7 @@ class PetSprite {
     this.pos = { x: 0, y: 0 };
 
     // 播放状态（与浏览器同构）
-    // 动画池与权重按宠物取：文件宠物（pet/ 目录定义，extra）自带**完整独立**动画池；
+    // 动画池与权重按宠物取：文件宠物（pet/ 目录定义）自带**完整独立**动画池；
     // main 等常规宠物（无 anims 段）用全局 cfg.animations（与浏览器 pet.ts 同一语义）。
     this.animations = pet.animations || cfg.animations;
     this.weights = pet.animationWeights || cfg.animationWeights;

@@ -16,9 +16,9 @@ export const isWebVisible = (display: PetDisplay): boolean => display === 'web' 
 export const isDesktopVisible = (display: PetDisplay): boolean => display === 'desktop' || display === 'both';
 
 /** 把 host 的成品聚合拍平成渲染用宠物列表：
- *  条目级字段（animations / animationWeights / eventsRefreshSec / physics——合并器已填默认）吹进每只实例；
- *  assetRoot = 条目 key（= 素材根，多实例共享）；非 main 条目的实例打 extra 标记
- *  （文件宠物：设置页不可编辑、保存时排除）。 */
+ *  条目级字段（animations / animationWeights / eventsRefreshSec / physics / workStatusTexts——
+ *  合并器已填默认）吹进每只实例；assetRoot = 条目 key（= 素材根，多实例共享；
+ *  设置页按它把实例分流回各自的配置文件）。 */
 export function flattenConfigPets(merged: Record<string, Record<string, unknown>>): Pet[] {
   const out: Pet[] = [];
   for (const [entry, conf] of Object.entries(merged)) {
@@ -32,7 +32,6 @@ export function flattenConfigPets(merged: Record<string, Record<string, unknown>
         physics: conf.physics as PhysicsParams | undefined,
         workStatusTexts: conf.workStatusTexts as string[][] | undefined,
         assetRoot: entry,
-        extra: entry !== 'main',
       });
     }
   }
