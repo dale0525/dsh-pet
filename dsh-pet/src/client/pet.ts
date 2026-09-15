@@ -33,6 +33,8 @@ import {
 // 对话弹窗：与桌面共用同一份组件（数据经 host /chat 读写同一份记忆）
 import { mountChatDialog } from '../shared/chat';
 import { petBridge } from './settings';
+// 移动端判定（粗指针 / 窄视口）：命中即整块 overlay 不挂载，见文件末尾 PetOverlay
+import { isMobileEnvironment, subscribeMobileEnvironment } from './mobile';
 // 拖拽抛掷物理（弹簧跟手 + 甩抛 + 重力反弹）：两端共用同一份纯计算（src/shared/physics.ts）
 import {
   estimateReleaseVelocity,
@@ -101,7 +103,7 @@ function injectCss(): void {
 /**
  * 制造宠物页面组件（工厂，与 makePetConfigSection 同理：react 由运行时注入）。
  * @param rt 运行时注入的 react 能力（h=jsx / useState / useEffect / useRef）
- * @returns PetMulti 多开容器组件（内部渲染多个 PetCard）
+ * @returns PetOverlay 移动端门组件（非移动端时内部渲染 PetMulti 多开容器）
  */
 export function makePetUI(rt: {
   h: typeof jsx;
@@ -1576,5 +1578,17 @@ export function makePetUI(rt: {
       : null;
   }
 
-  return PetMulti;
+  // ---- 移动端门（外层，必须包住 PetMulti 本体）----
+  // 为什么门必须在这一层而不是 PetMulti 内部：PetMulti 一旦挂载就会拉 /config 并启动
+  // 余额 / 余额触发 / 工作状态三条轮询（每只宠物另有自己的碎碎念轮询）。把门放在组件内部
+  // （例如 return null）等于轮询照跑、只是不渲染——手机上的后台请求与耗电一点没省。
+  // 放在这一层则挂载即返回 null：fetch 与 setInterval 全都不存在，且移动端判定变化
+  // （缩放、旋转、插拔鼠标）时整棵子树干净地挂载/卸载。
+  function PetOverlay() {
+    const [isMobile, setIsMobile] = useState<boolean>(isMobileEnvironment());
+    useEffect(() => subscribeMobileEnvironment(setIsMobile), []);
+    return isMobile ? null : h(PetMulti, {});
+  }
+
+  return PetOverlay;
 }

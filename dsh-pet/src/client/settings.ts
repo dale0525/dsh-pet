@@ -13,6 +13,7 @@
  */
 import { PET_DISPLAYS, flattenConfigPets } from '../shared/config';
 import { NOTIFY_ICONS, reloadNotifications, requestNotificationPermission } from './notify';
+import { isMobileEnvironment, subscribeMobileEnvironment } from './mobile';
 import type { Corner, Pet, PetDisplay } from '../shared/types';
 import type { ChangeEvent, CSSProperties, Dispatch, FunctionComponent, SetStateAction } from 'react';
 import type * as ReactNS from 'react';
@@ -30,6 +31,32 @@ export const petBridge: {
   sync: () => {},
   template: undefined,
 };
+
+/** 确保 petBridge 已被填充（成品拍平后的完整列表 + 「添加宠物」模板）。
+ *
+ *  为什么需要它：petBridge 原本只由 PetMulti 挂载时填充，而移动端 PetOverlay 不挂载
+ *  PetMulti——于是移动端有两个消费方会拿到空列表：设置页（点保存 = 提交空列表删光宠物）
+ *  与 `/pet` 命令选择框（候选恒为空）。两者都在用之前调本函数兜底自拉一次。
+ *
+ *  幂等且并发安全：已有数据直接返回；并发调用共用同一个在途 Promise（只发一次请求）。
+ *  失败时抛错，由调用方决定怎么呈现（设置页显示错误并禁用保存，弹窗保持为空）。 */
+let petBridgeLoad: Promise<Pet[]> | null = null;
+export function ensurePetBridge(): Promise<Pet[]> {
+  if (petBridge.current.length > 0) return Promise.resolve(petBridge.current);
+  petBridgeLoad ??= (async () => {
+    const r = await fetch('/dsh-pet-7340/config');
+    if (!r.ok) throw new Error('config HTTP ' + r.status);
+    const merged = (await r.json()) as Record<string, Record<string, unknown>>;
+    const list = flattenConfigPets(merged);
+    petBridge.current = list;
+    petBridge.template = Array.isArray(merged.main?.pets) ? ((merged.main.pets as Pet[])[0] ?? undefined) : undefined;
+    return list;
+  })().finally(() => {
+    // 失败不缓存：下次调用可重试（成功时 current 已非空，函数开头的短路即返回）
+    petBridgeLoad = null;
+  });
+  return petBridgeLoad;
+}
 
 /** 「添加宠物」的初值模板：主条目没有实例时（用户删光了宠物）petBridge.template 为 undefined，
  *  用内置默认宠物的同形状初值兜底——否则「添加宠物」会静默无反应。
@@ -95,6 +122,8 @@ export const zh = {
   userConfig: '用户配置（自定义覆盖）',
   animationDir: '动画素材目录（可自定义/扩充动画）',
   saved: '已保存，桌宠即时生效。',
+  mobileDisabled:
+    '当前是移动端（触摸设备或窗口宽度小于 768px）：桌宠已自动隐藏，配置仍然有效，在桌面浏览器打开即恢复显示。',
   loadError: '加载配置失败',
   invalid: '请检查输入：大小需为正数，边距可为任意数字。',
   busy: '保存中…',
@@ -183,6 +212,8 @@ export const en = {
   userConfig: 'User config (custom overrides)',
   animationDir: 'Animation assets dir (add/customize animations here)',
   saved: 'Saved — the pets updated instantly.',
+  mobileDisabled:
+    'You are on a mobile device (touch input or a viewport narrower than 768px): the pets are hidden automatically. Your config is intact and shows up again in a desktop browser.',
   loadError: 'Failed to load config',
   invalid: 'Check your input: size must be positive; margins can be any number.',
   busy: 'Saving…',
@@ -310,6 +341,36 @@ export function makePetConfigSection(rt: {
     const [chatImage, setChatImage] = useState(false);
     // 权限申请按钮的反馈（就地显示在按钮旁，与全局保存反馈分离）
     const [permMsg, setPermMsg] = useState<{ kind: 'ok' | 'err' | ''; text: string }>({ kind: '', text: '' });
+    // 是否移动端：命中时宠物 overlay 不挂载（见 pet.ts 的 PetOverlay），设置页仍在——
+    // 这里给一行说明，否则用户会以为宠物坏了或配置丢了。
+    const [isMobile, setIsMobile] = useState<boolean>(isMobileEnvironment());
+    useEffect(() => subscribeMobileEnvironment(setIsMobile), []);
+    // 列表就绪标志：petBridge.current 只由 PetMulti 拉配置时填充（见 pet.ts），移动端 overlay
+    // 不挂载 → 这里拿到空列表。若就此渲染，用户点「保存」会提交 { pets: [] } 把宠物**静默删光**
+    // （删光是合法操作，host 不会拦）。故移动端必须自己拉一次成品；拉失败则禁用保存，绝不提交空列表。
+    const [listReady, setListReady] = useState<boolean>(petBridge.current.length > 0);
+    useEffect(() => {
+      if (petBridge.current.length > 0) return; // 非移动端：PetMulti 已填好，不重复拉取
+      let alive = true;
+      (async () => {
+        try {
+          const list = await ensurePetBridge();
+          if (!alive) return;
+          setPets(list.map((p) => ({ ...p, position: { ...p.position } })));
+          setSelId(list[0]?.id ?? '');
+          setListReady(true);
+        } catch (e) {
+          if (!alive) return;
+          console.error('[dsh-pet] 设置页加载宠物列表失败，已禁用保存以免清空配置', e);
+          // 用户可见反馈：否则界面只显示「暂无宠物」+ 灰掉的保存按钮，
+          // 用户分不清是网络失败还是真的没有宠物。
+          setMsg({ kind: 'err', text: t('loadError') });
+        }
+      })();
+      return () => {
+        alive = false;
+      };
+    }, []);
     useEffect(() => {
       let alive = true;
       // 成品聚合的 main 条目已带合并后的全局字段（用户手写值优先）
@@ -331,6 +392,9 @@ export function makePetConfigSection(rt: {
     }, []);
 
     const toggleNotify = async (v: boolean) => {
+      // 列表未就绪时禁止整包写入：本函数与「保存」同构，body 里带 pets，
+      // 列表为空时提交等于把宠物静默删光（与保存按钮同一道门禁，见 listReady 注释）。
+      if (!listReady) return;
       setBusy(true);
       setMsg({ kind: '', text: '' });
       try {
@@ -461,6 +525,9 @@ export function makePetConfigSection(rt: {
         setSelId(list[0]?.id ?? '');
         petBridge.current = list;
         petBridge.sync(list);
+        // 重置已拿到新的成品列表：解除保存门禁。否则「移动端首拉失败 → 重置成功」
+        // 这条路径下 listReady 仍是 false，保存按钮会永久禁用，用户改不动刚恢复的宠物。
+        setListReady(true);
         setMsg({ kind: 'ok', text: t('saved') });
       } catch {
         setMsg({ kind: 'err', text: t('loadError') });
@@ -542,6 +609,18 @@ export function makePetConfigSection(rt: {
           },
           children: t('intro'),
         }),
+        // 移动端说明：宠物 overlay 被禁用（配置照常可编辑），见 pet.ts 的 PetOverlay
+        isMobile
+          ? h('p', {
+              style: {
+                margin: 0,
+                fontSize: '12px',
+                color: 'var(--dsw-alias-state-business-primary)',
+                lineHeight: '18px',
+              },
+              children: t('mobileDisabled'),
+            })
+          : null,
         // 文件宠物说明（带徽章的那些宠物：编辑会写回它们自己的文件）
         pets.some((p) => p.assetRoot && p.assetRoot !== 'main')
           ? h('p', {
@@ -594,7 +673,9 @@ export function makePetConfigSection(rt: {
             h('button', {
               type: 'button',
               onClick: addPet,
-              disabled: busy,
+              // 列表未就绪时禁止添加：异步拉取回来会用成品列表覆盖这次添加（用户白点一次），
+              // 且拉取失败时加了也保存不了。
+              disabled: busy || !listReady,
               style: {
                 border: '1px dashed var(--dsw-alias-border-l2)',
                 background: 'transparent',
@@ -854,7 +935,8 @@ export function makePetConfigSection(rt: {
             h('input', {
               type: 'checkbox',
               checked: notifyEnabled,
-              disabled: busy,
+              // 与保存同源的门禁：本开关整包写入（含 pets），列表未就绪时提交会清空宠物
+              disabled: busy || !listReady,
               onChange: (e: ChangeEvent<HTMLInputElement>) => void toggleNotify(e.target.checked),
               style: { width: '16px', height: '16px', accentColor: 'var(--dsw-alias-state-business-primary)' },
             }),
@@ -940,7 +1022,8 @@ export function makePetConfigSection(rt: {
           children: [
             h('button', {
               type: 'button',
-              disabled: busy,
+              // 列表未就绪（移动端自拉成品失败）时禁用保存：提交空列表 = 静默删光全部宠物
+              disabled: busy || !listReady,
               onClick: save,
               style: {
                 border: '1px solid var(--dsw-alias-button-info-fill)',
@@ -950,7 +1033,7 @@ export function makePetConfigSection(rt: {
                 padding: '4px 14px',
                 fontSize: '12px',
                 cursor: 'pointer',
-                opacity: busy ? 0.5 : 1,
+                opacity: busy || !listReady ? 0.5 : 1,
               },
               children: t('save'),
             }),

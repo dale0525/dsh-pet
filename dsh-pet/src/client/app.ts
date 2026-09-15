@@ -2,7 +2,7 @@
 // 页面代码不在本文件：宠物页面在 pet.ts，设置页在 settings.ts——
 // 类似 Vue 的 App.vue 只挂根组件、SpringBoot 启动类只做装配，不写页面业务。
 import { makePetUI } from './pet';
-import { makePetConfigSection, NS, zh, en, petBridge } from './settings';
+import { makePetConfigSection, NS, zh, en, petBridge, ensurePetBridge } from './settings';
 import { startNotify } from './notify';
 import type * as ReactNS from 'react';
 
@@ -20,7 +20,7 @@ export function makeFactory(): (require: (mod: string) => any) => any {
     const { jsx: h } = require('react/jsx-runtime');
 
     // 宠物页面（overlay）与配置设置页：组件各自独立文件，这里只组装 + 注册
-    const PetMulti = makePetUI({ h, useState, useEffect, useRef });
+    const PetOverlay = makePetUI({ h, useState, useEffect, useRef });
 
     const name = 'pet';
     // commandUi 写成服务依赖（与官方 client-ui-permission-presets 的写法一致）：
@@ -56,13 +56,22 @@ export function makeFactory(): (require: (mod: string) => any) => any {
           available: () => true,
           ui: {
             kind: 'popupSelect',
-            // 选项 = 当前生效宠物列表（petBridge.current：主宠物 + 文件宠物，name 已兜底）
-            options: async () =>
-              petBridge.current.map((p) => ({
+            // 选项 = 当前生效宠物列表（petBridge.current：主宠物 + 文件宠物，name 已兜底）。
+            // 移动端 PetMulti 不挂载、petBridge 从未被填充，故这里先 ensurePetBridge 兜底自拉
+            // 一次成品——否则移动端打开选择框永远是空的（用户已裁定移动端保留 /pet 可配置）。
+            options: async () => {
+              try {
+                await ensurePetBridge();
+              } catch (e) {
+                console.error('[dsh-pet] /pet 选择框加载宠物列表失败', e);
+                return [];
+              }
+              return petBridge.current.map((p) => ({
                 id: p.id,
                 label: p.name || p.id,
                 detail: (p.assetRoot && p.assetRoot !== p.id ? p.assetRoot + ' / ' : '') + p.id,
-              })),
+              }));
+            },
             // 选中 → 提交 /pet <id>（host handler 校验并设置当前桌宠，命令节点回显名字）
             onSelect: async (option: { id: string }, session: { sessionId: string }) => {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any -- remote 无静态类型
@@ -72,9 +81,9 @@ export function makeFactory(): (require: (mod: string) => any) => any {
         });
       }, 'dsh-pet: /pet picker');
 
-      // 宠物 overlay（多开：容器渲染多个 PetCard）
+      // 宠物 overlay（移动端门 + 多开容器：门在移动端返回 null，连轮询都不启动）
       ctx.slots.inject('shell.overlay', function* () {
-        yield ctx.slots.register({ name: 'shell.overlay', id: 'pet', order: 1000 }, () => h(PetMulti, {}));
+        yield ctx.slots.register({ name: 'shell.overlay', id: 'pet', order: 1000 }, () => h(PetOverlay, {}));
       });
 
       // 设置页：「桌宠配置」（大小/位置，保存即时生效）
