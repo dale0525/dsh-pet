@@ -13,9 +13,13 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "step01"
 OUT = ROOT / "step02"
-# 统一使用工作区自带的 ffmpeg（素材处理链零第三方依赖）
-FFMPEG = str(ROOT / ".tools" / "ffmpeg-9.0.1-essentials_build" / "bin" / "ffmpeg.exe")
-FFPROBE = str(ROOT / ".tools" / "ffmpeg-9.0.1-essentials_build" / "bin" / "ffprobe.exe")
+try:
+    from _tools import ffmpeg, ffprobe, same_duration
+except ImportError:
+    from scripts._tools import ffmpeg, ffprobe, same_duration
+
+FFMPEG = ffmpeg()
+FFPROBE = ffprobe()
 
 PARALLEL = 4
 W, H, FPS = 1280, 720, 24
@@ -34,11 +38,6 @@ MARGIN_X = WIDTH // 10
 MARGIN_Y = HEIGHT // 10
 FRAMES_PER_VIDEO = 10
 QUANTIZE = 8
-
-GREEN_HUE_MIN = 70.0
-GREEN_HUE_MAX = 170.0
-SATURATION_MIN = 0.15
-VALUE_MIN = 0.15
 
 
 def rgb_to_hsv(r: int, g: int, b: int) -> tuple[float, float, float]:
@@ -90,7 +89,7 @@ def sample_background_color(video: Path) -> str:
                 index = (y * WIDTH + x) * 3
                 r, g, b = frame[index], frame[index + 1], frame[index + 2]
                 hue, sat, val = rgb_to_hsv(r, g, b)
-                if GREEN_HUE_MIN <= hue <= GREEN_HUE_MAX and sat >= SATURATION_MIN and val >= VALUE_MIN:
+                if GREEN_HUE_MIN <= hue <= GREEN_HUE_MAX and sat >= SAT_MIN and val >= VAL_MIN:
                     q = (r // QUANTIZE * QUANTIZE, g // QUANTIZE * QUANTIZE, b // QUANTIZE * QUANTIZE)
                     counter[q] += 1
 
@@ -143,12 +142,13 @@ def _rgb_to_hsv(frame: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     return hue, sat, mx
 
 
-def convert_video(src: Path, dst: Path, color: str) -> None:
+def convert_video(src: Path, dst: Path) -> None:
     """HSV 色相判定抠像：绿色色相 + 足够饱和/明度 → 透明。
 
     输入管道：step01 视频 rgb24 流；输出管道：yuva420p → VP9 透明 webm。
+    抠像只依赖固定 HSV 色相区间，**不使用**采样到的背景具体色值
+    （采样仅用于 `sample_background_color` 的「有没有绿」fail-closed 前置校验）。
     """
-    bg = np.array([int(color[i:i + 2], 16) for i in (1, 3, 5)], np.uint8)  # #RRGGBB（仅用于参考）
     p1 = subprocess.Popen(
         [FFMPEG, "-loglevel", "error", "-i", str(src), "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
         stdout=subprocess.PIPE)
@@ -184,14 +184,20 @@ def convert_video(src: Path, dst: Path, color: str) -> None:
 
 
 def _is_valid(dst: Path, src: Path, min_size: int = 50_000) -> bool:
-    """断点续跑完整性检查：存在、够大、不比源旧、且能被 ffprobe 读到视频流。"""
+    """断点续跑完整性检查：存在、够大、不比源旧、能被 ffprobe 读到视频流，**且时长与源一致**。
+
+    最后一条是防截断：进程被杀（超时 / Ctrl-C）时留下的 webm 往往是完整可解码的前缀，
+    前三条判据全过——实测事故见 `_tools.same_duration` 的 docstring。
+    """
     if not dst.exists() or dst.stat().st_size <= min_size:
         return False
     if dst.stat().st_mtime < src.stat().st_mtime:
         return False
     r = subprocess.run([FFPROBE, "-v", "error", "-show_entries", "stream=codec_name",
                         "-of", "csv=p=0", str(dst)], capture_output=True)
-    return bool(r.stdout.strip())
+    if not r.stdout.strip():
+        return False
+    return same_duration(dst, src)
 
 
 def _process_one(video: Path) -> tuple[str, str]:
@@ -199,8 +205,10 @@ def _process_one(video: Path) -> tuple[str, str]:
     dst = OUT / (video.stem + ".webm")
     if _is_valid(dst, video):
         return video.name, "SKIP"
+    # fail-closed 前置校验：边框采不到绿像素 → 直接抛错，绝不产出一张全不透明的 webm。
+    # 采到的具体色值不参与抠像（抠像用固定 HSV 区间），只在进度行里报告。
     color = sample_background_color(video)
-    convert_video(video, dst, color)
+    convert_video(video, dst)
     return video.name, f"{color}"
 
 

@@ -26,9 +26,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "pr"                    # PR 扣好的透明 mov
 OUT = ROOT / "step02"                # 直接覆盖 step02（等价于 chroma_step02 产物）
-# 统一使用工作区自带的 ffmpeg（素材处理链零第三方依赖）
-FFMPEG = str(ROOT / ".tools" / "ffmpeg-9.0.1-essentials_build" / "bin" / "ffmpeg.exe")
-FFPROBE = str(ROOT / ".tools" / "ffmpeg-9.0.1-essentials_build" / "bin" / "ffprobe.exe")
+try:
+    from _tools import ffmpeg, ffprobe
+except ImportError:
+    from scripts._tools import ffmpeg, ffprobe
+
+FFMPEG = ffmpeg()
+FFPROBE = ffprobe()
 
 PARALLEL = 4
 # 转码参数（用户指定：VP9 + 透明 + 恒定质量 CRF32）

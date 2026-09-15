@@ -369,7 +369,7 @@ URL 形如 `/thumb/dachshund/<动画名>.webm`，**查不到即 404，绝不回�
 
 ### 7.4 门禁（fail-closed）
 
-**必须有**：一个 `test/pet-dachshund/` 下的评估脚本 + 单元测试，
+**必须有**：一个 pet pack 目录下的评估脚本 + 单元测试（现位于 `pets/dachshund/`，见 §19），
 对「无狗纯绿幕视频」**必须判 REVIEW**（沿用 `test/pet1/evaluate_h3_pet1.py` 已修的 fail-closed 设计，
 该缺陷已固化为 `FailClosedGateTests`）。
 
@@ -443,6 +443,10 @@ URL 形如 `/thumb/dachshund/<动画名>.webm`，**查不到即 404，绝不回�
 > `test/pet1/` 按第 5 条裁定**不纳入 git**，需补 `test/` 忽略条目。
 > 另：工作区已有前序「透明背景探测」遗留的未跟踪目录 `dsh-image-gen/`（3 张 PNG，时间戳 Sep 13），
 > 与本次计划无关，后续一并忽略或清理。
+>
+> **2026-09-15 已执行（见 §19）**：`.pixi/` 与 `test/pet1/` 的忽略条目已补；
+> `pixi.toml` 已入库；`dsh-image-gen/` 已**删除**（不再是「忽略」而是「清理」）；
+> pet pack 的资产与工具已迁至 `pets/dachshund/` 并入库。
 
 ## 11. 用户裁定（已冻结，2026-09 定稿）
 
@@ -521,6 +525,12 @@ fork 与自有仓库维护**不豁免**该义务——后续若公开分发 pet 
 
 ## 12. 复现方式
 
+> **2026-09-15 路径变更**：pet pack 的源资产与工具已从 `test/pet-dachshund/` 迁到
+> **`pets/dachshund/`**（`pets/<种类名>/` 与运行时 `$DSH_HOME/dsh-pet/pet/<种类名>-{config.json,animation/}`
+> 一一对应）。目录深度不变，各脚本的 `REPO_ROOT = parents[2]` 仍解析正确。
+> H3 成片由 `p2/p3/p4-h3-out/<动作>/output.mp4` 三级嵌套**扁平化**为 `pets/dachshund/h3/<动作>.mp4`，
+> 成本溯源记录同步为 `pets/dachshund/reports/<动作>.json`。见 §19。
+
 ```sh
 # 本仓库自带 pixi 环境（P0a 建；numpy/scipy/pillow/ffmpeg 都在里面），不再依赖外部工程的解释器
 cd /Volumes/LogicExt/Git/dsh-pet
@@ -529,12 +539,14 @@ cd /Volumes/LogicExt/Git/dsh-pet
 pixi run python -m unittest discover -s test/pet1 -t test/pet1              # 29 项
 pixi run python test/pet1/evaluate_h3_pet1.py test/pet1/h3-out/output.mp4   # 退出码 0 = PASS
 
-# 腊肠犬绿幕链（P1/P2 验收）
-pixi run python test/pet-dachshund/test_bridge_step00.py
-pixi run python test/pet-dachshund/test_scripts_tools.py
-pixi run python test/pet-dachshund/test_evaluate_dachshund.py
-pixi run python test/pet-dachshund/evaluate_dachshund.py frames test/pet-dachshund/frames/base-standing.png
-pixi run python test/pet-dachshund/evaluate_dachshund.py video test/pet-dachshund/p2-h3-out/output.mp4 --seconds 10
+# 腊肠犬绿幕链（P1/P2 验收）——pet pack 源资产与工具都在 pets/dachshund/
+pixi run python pets/dachshund/test_bridge_step00.py
+pixi run python pets/dachshund/test_scripts_tools.py
+pixi run python pets/dachshund/test_frame_plate.py
+pixi run python pets/dachshund/test_resume_truncation.py
+pixi run python pets/dachshund/test_evaluate_dachshund.py
+pixi run python pets/dachshund/evaluate_dachshund.py frames pets/dachshund/frames/base-standing.png
+pixi run python pets/dachshund/evaluate_dachshund.py video pets/dachshund/h3/待机呼吸.mp4 --seconds 10
 ```
 
 ---
@@ -1276,3 +1288,77 @@ pack 已装入运行中的 DSH，**数据目录 `$DSH_HOME/dsh-pet/`**（与插�
 零宠物终态下 `flattenPetList` 为空、`whisperPrompt` 保留，「恢复默认」可找回默认宠物。
 运行态 HTTP 端到端：先写一只 `probe` 再发裸 `{pets:[]}` → 磁盘确变为 `pets: []`（旧代码此处会静默无操作）；
 GUI 实测「添加宠物 → 删除 → 保存」全链路通过（保存后提示「已保存，桌宠即时生效。」，0 console 错误）。
+
+---
+
+## 19. 资产整理与清理（2026-09-15）
+
+把 pet pack 的**可复用资产**从散落的 `test/pet-dachshund/` 收拢为正式目录，并删除已作废的中间产物与探测遗留。
+
+### 19.1 目录变更
+
+| 旧位置 | 新位置 | 说明 |
+| --- | --- | --- |
+| `test/pet-dachshund/prompts/` | `pets/dachshund/prompts/` | 20 个 H3 提示词 |
+| `test/pet-dachshund/frames/` | `pets/dachshund/frames/` | 3 张身份基准首尾帧 |
+| `test/pet-dachshund/raw/` | `pets/dachshund/raw/` | 2 张图生图原图 |
+| `test/pet-dachshund/p{2,3,4}-h3-out/<动作>/output.mp4` | `pets/dachshund/h3/<动作>.mp4` | **三级嵌套扁平化**；20 段 H3 成片 |
+| `test/pet-dachshund/p{2,3,4}-h3-out/<动作>/report.json` | `pets/dachshund/reports/<动作>.json` | 成本/溯源记录 |
+| `test/pet-dachshund/evaluate_dachshund.py`、`test_*.py` | `pets/dachshund/` | 门禁与 5 个单测（共 34 项） |
+
+**为什么用 `pets/<种类名>/`**：与运行时 `$DSH_HOME/dsh-pet/pet/<种类名>-{config.json,animation/}` 一一对应，
+新增宠物时目录结构自解释。目录深度不变（都是仓库根的二级子目录），
+故各脚本的 `REPO_ROOT = Path(__file__).resolve().parents[2]` **无需改动**。
+
+### 19.2 代码与文档同步
+
+| 文件 | 改动 |
+| --- | --- |
+| `pets/dachshund/evaluate_dachshund.py` | 新增 `PET_DIR`/`H3_DIR`；两个 resolver 去掉 `p2/p3/p4-h3-out` 的 parent 特例（扁平化后不需要），`resolve_raw_counterpart` 首选 `H3_DIR/<stem>.mp4` |
+| `pets/dachshund/test_evaluate_dachshund.py` | `sys.path` 指向 `pets/dachshund` |
+| `pets/dachshund/test_resume_truncation.py` | `TMP` 指向 `pets/dachshund/.tmp-truncation` |
+| `pets/dachshund/README.md` | **新增**：目录说明、六段链路、新增动画步骤、从 `h3/` 重跑下游、门禁用法、装配位置、署名义务 |
+| `README.md` | 「项目结构」新增 `pets/` 条目 |
+| `.gitignore` | 删除已不存在的 `dsh-image-gen/`；注释更新（pet pack 资产在 `pets/`） |
+
+### 19.3 清理清单（释放 ≈343 MB）
+
+| 路径 | 体积 | 判定依据（实测） |
+| --- | --- | --- |
+| `step00/` | 20 M | 20/20 与 `h3/` 成片 **md5 逐字节相同**，纯冗余 |
+| `step01/` `step02/` `step03/` | 154 M | 桥接/抠像/归一化中间产物，可从 `h3/` 再生 |
+| `step04/` | 7.2 M | 20/20 与已装 pack `$DSH_HOME/dsh-pet/pet/dachshund-animation/` 逐字节相同 |
+| `p4-h3-out/*/generated-243-*.mp4` | 20 M | 243 帧预终稿；契约输入是 240 帧的 `output.mp4`（已入 `h3/`） |
+| `p2/p3/p4-h3-out/stills/` | 1.9 M | 评审截图，可从视频重抽 |
+| `test/pet1/transparent-probe/` | 135 M | 前序透明探测，仅 `ACTION-DESIGN.md` 引用 |
+| `dsh-image-gen/` | 5.1 M | 前序失败尝试（RGB 画棋盘格冒充透明），已被 `raw/` 取代 |
+
+> **`step00/` 保留 `.gitignore` 条目**：它仍是 `bridge_step00.py` 的默认输入目录，
+> 只是本包的 H3 成片已入库到 `pets/dachshund/h3/`，从那里重跑需显式 `--src pets/dachshund/h3`。
+
+### 19.4 入库范围与验收
+
+入库 `pets/dachshund/` 下 **72 个文件 ≈ 27 MB**：20 H3 成片 + 20 报告 + 20 提示词 + 3 首尾帧 + 2 原图
++ README + 评估器 + 5 个单测。**`step01`–`step04` 不入库**（中间产物，可再生）。
+
+**验收（全部本会话实测）**：
+
+| 项 | 结果 |
+| --- | --- |
+| 资产完整性 | 71/71 条目（20 提示词 + 3 帧 + 2 原图 + 20 H3 + 20 报告）md5 **与搬迁前完全一致** |
+| Python 单测 | **34/34 OK**（frame_plate 10 / scripts_tools 3 / bridge_step00 4 / evaluate_dachshund 12 / resume_truncation 5） |
+| TS 套件 | `npm test` **168/167/1**（唯一失败为既有 Electron ENOENT，与本轮无关） |
+| 静态检查 | `tsc --noEmit` 0 · `eslint` 0 · `prettier --check src/` 0 |
+| 门禁实跑 | `evaluate_dachshund.py frames` 与 `video`（raw 模式）均正常，容器判据 864×480 / 24fps / 10.0s / h264 全部命中 |
+| resolver 探针 | `resolve_raw_counterpart` 命中扁平 `h3/<动作>.mp4`；`resolve_keyed_counterpart` 在 `step04/` 缺失时返回 `None` 而非抛错 |
+
+> **关于 20 段 H3 的 raw 模式判定**：逐段跑门禁时 14 段 PASS、6 段 REVIEW，
+> 失败的 6 段**全部且仅仅**是「原始成片绿溢 > 2%」（`余额-满溢欢腾` 0.0475、`爪嘴并用拆礼物` 0.0238、
+> `爪拨玩具小车` 0.0219、`单爪抬起招手` 0.0215、`横向侧步滑行` 0.0202、`哈欠连天甩头` 0.0201）。
+> 这与 §16.6 表格**逐条吻合**，是**既有事实而非本轮引入**：`step04/` 按设计不入库，
+> 故 raw 模式只能走「无交付物 → 用原始绿溢判」的降级分支（`evaluate_dachshund.py:14-15`）。
+> 显式补上 `--deliverable`（用已装 pack 的 `.webm`）后，**这 6 段全部转 PASS**，与 §16.9 的 20/20 裁定一致。
+
+> **`reports/*.json` 里的 `output_path` / `ffprobe.format.filename` 保留旧绝对路径**：
+> 它们是**生成当时的不可变审计记录**（ffprobe 原始输出），改写会伪造溯源，故原样保留。
+> 无任何代码消费这些字段（已 grep 确认）。

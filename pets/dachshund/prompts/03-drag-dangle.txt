@@ -1,0 +1,22 @@
+subject_definitions:
+<Picture 1> is the opening-frame target (best effort) for <Subject 1>: the dog standing on all four legs, facing the camera dead-on on a flat pure green chroma-key background, mouth slightly open with the pink tongue out, tail hanging down behind.
+<Picture 2> is the ending-frame target (best effort) for <Subject 1>: exactly the same standing pose as <Picture 1> — the action must end where it began so the clip loops without a jump.
+<Subject 1> is the long-haired golden-red miniature dachshund in <Picture 1> and <Picture 2>, with feathered golden-red fur, long drooping feathered ears, dark round eyes, a black nose, and a lighter cream chest and front paws. Its short legs and long low body are part of the identity.
+
+summary:
+[reference generation] The target video is a single continuous static shot of <Subject 1> suspended vertically in mid-air and lowered back down on a flat chroma-key green background. Over an effective duration of 10 seconds the dog is lifted gently upward by an invisible grasp as if held by the scruff, hanging centered with all four paws dangling downward in mid-air and looking puzzled, before being lowered smoothly back to the exact starting spot. Its silhouette stays compact and centered in the middle of the frame the whole time — the head and tail remain close to the body without swinging outward — and it finishes on the exact standing pose shown in <Picture 2>. It never translates across the frame, never kicks violently, and nothing else appears in the shot.
+
+retention_analysis:
+<Subject 1> (appears throughout): fully_preserved - the golden-red feathered fur, long drooping feathered ears, dark round eyes, black nose, cream chest and front paws, short legs and long low body are all retained.
+<Picture 1>: partially_preserved - opening-frame target (best effort); the standing pose, the front-on head position, the open mouth with the pink tongue out, and the hanging tail guide the first frame.
+<Picture 2>: partially_preserved - ending-frame target (best effort); it is the same standing pose as <Picture 1>, so the last second returns to the opening configuration for a seamless loop.
+The flat pure green background is fully retained on every frame, with no shadows, no props, no text and no added objects.
+
+detailed_description:
+A single continuous shot on a flat chroma-key green background, no cuts and no camera movement. A static medium shot of <Subject 1> centered in the frame, maintaining its horizontal center of mass throughout the clip. [Shot 1] The dog starts in the standard standing pose of <Picture 1>, all four paws on the ground, head upright and facing forward. From 00:01.000 the dog is smoothly lifted vertically upward in place as if held gently by the scruff by an invisible hand, rising by a moderate height so all four paws lift cleanly off the ground. Through 00:03.000 the body becomes slightly arched and elongated in vertical suspension, while all four short legs dangle naturally downward in mid-air; the head tilts slightly with an adorable puzzled expression and wide dark round eyes, the ears resting down beside the cheeks. From 00:03.000 through 00:07.000 the dog remains suspended in mid-air at the same vertical height, with tiny subtle sway of less than two degrees, its four dangling paws held comfortably beneath it; the outline stays strictly centered and compact with the head and tail kept close to the body, well inside the frame with at least fifteen percent green margin along all four borders. From 00:07.000 the upward tension releases and the dog is lowered slowly and gently back downward. Through 00:09.000 all four paws touch down softly on the original footprint on the ground, the knees flexing slightly to absorb the landing. By 00:10.000 the dog is completely still on all four legs in exactly the standing pose of <Picture 2>, matching <Picture 1> frame for frame — same paw positions, same head height, same tail position, and relaxed tongue out. The dog never kicks or thrashes, never shifts horizontally, and never rotates off-axis; its silhouette stays centered in the frame with generous green margin on every side.
+
+overall_soundscape:
+Quiet indoor room tone, very low in the mix, with the faint rustle of soft fur as the dog is lifted, a tiny soft puzzled whimper or breathing sound, and the gentle pat of small paw pads settling onto the floor upon landing. No music, no speech and no other animal sounds.
+
+non_diegetic_music:
+N/A

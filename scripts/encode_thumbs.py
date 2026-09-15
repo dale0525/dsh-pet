@@ -1,24 +1,27 @@
-"""Transcode step03 masters into 360x360 playback thumbnails (step04).
+"""Transcode step03 masters into 640x360 playback thumbs (step04).
 
-素材处理链的第 4 步（转码）：把归一化后的 1200x1200 透明母版（step03/）
-转成 360x360 播放变体（step04/），供 dsh-pet 插件运行时使用。
+素材处理链的第 4 步（转码）：把归一化后的 2160x1215 透明母版（step03/）
+转成 640x360 播放变体（step04/），供 dsh-pet 插件运行时使用。
 
-完整处理链（与 crop_step01.py / chroma_step02.py / normalize_step03.py 同级）：
-  step01（原始视频）→ crop_step01.py → chroma_step02.py（绿幕抠像）
-  → step02（透明 810x720）→ normalize_step03.py（归一化 1200x1200 统一站立）
-  → step03（母版）→ 本脚本 → step04（360x360 播放变体）
+完整处理链（与 chroma_step02.py / normalize_step03.py 同级）：
+  step00（H3 原始 864x480）→ bridge_step00.py（桥接到 1280x720）
+  → step01 → chroma_step02.py（绿幕抠像）→ step02（透明 1280x720）
+  → normalize_step03.py（归一化 2160x1215 统一站立）→ step03（母版）
+  → 本脚本 → step04（640x360 播放变体）
 
-step04 是素材处理链的最终产物。发布/安装插件时把 step04 的内容
-同步到 dsh-pet/assets/thumb/（npm 包需要自包含的播放资源）。
+step04 是素材处理链的最终产物，去向是 **pet pack**：
+  `$DSH_HOME/dsh-pet/pet/<名>-animation/*.webm`（扁平存放，`<名>-config.json` 里的动画名即文件名）。
+  （本脚本只负责产出 step04，把文件搬进 pack 不是它的事。主宠物的 `dsh-pet/assets/webm/`
+  属于另一条线，与本链无关——别把本链产物往里放。）
 
 为什么需要转码：
-- 播放时宠物只显示约 260px，360 分辨率已足够清晰，1200 是 4.6 倍冗余
-- 1200 全量 172MB 超过 npm 包体积上限；转码后仅 ~10MB，可以发布
+- 播放时宠物只显示约 260px，640 宽度已足够清晰，2160 是 3.4 倍冗余
+- 2160x1215 母版全量体积过大；640x360 转码后仅约 1/10，可以随包发布
 - 播放更省内存、切换更快
 
 双轨设计：
-- thumb（本脚本产物，360x360，step04）→ 同步进 npm 包 assets/thumb/，运行时播放
-- full（step03 原始 1200x1200）→ 不进 npm 包，发布到 GitHub Releases 存档
+- thumb（本脚本产物，640x360，step04）→ 同步进播放端，运行时播放
+- full（step03 原始 2160x1215）→ 不进 npm 包，发布到 GitHub Releases 存档
 """
 
 from __future__ import annotations
@@ -30,9 +33,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "step03"
 OUT = ROOT / "step04"
-# 统一使用工作区自带的 ffmpeg（素材处理链零第三方依赖）
-FFMPEG = str(ROOT / ".tools" / "ffmpeg-9.0.1-essentials_build" / "bin" / "ffmpeg.exe")
-FFPROBE = str(ROOT / ".tools" / "ffmpeg-9.0.1-essentials_build" / "bin" / "ffprobe.exe")
+try:
+    from _tools import ffmpeg, ffprobe, same_duration
+except ImportError:
+    from scripts._tools import ffmpeg, ffprobe, same_duration
+
+FFMPEG = ffmpeg()
+FFPROBE = ffprobe()
 
 PARALLEL = 4
 # 转码参数（调这里改画质/分辨率）
@@ -81,14 +88,20 @@ def convert_video(src: Path, dst: Path) -> None:
 
 
 def _is_valid(dst: Path, src: Path, min_size: int = 20_000) -> bool:
-    """断点续跑完整性检查：存在、够大、不比源旧、且能被 ffprobe 读到视频流。"""
+    """断点续跑完整性检查：存在、够大、不比源旧、能被 ffprobe 读到视频流，**且时长与源一致**。
+
+    最后一条是防截断：进程被杀（超时 / Ctrl-C）时留下的 webm 往往是完整可解码的前缀，
+    前三条判据全过——实测事故见 `_tools.same_duration` 的 docstring。
+    """
     if not dst.exists() or dst.stat().st_size <= min_size:
         return False
     if dst.stat().st_mtime < src.stat().st_mtime:
         return False
     r = subprocess.run([FFPROBE, "-v", "error", "-show_entries", "stream=codec_name",
                         "-of", "csv=p=0", str(dst)], capture_output=True)
-    return bool(r.stdout.strip())
+    if not r.stdout.strip():
+        return False
+    return same_duration(dst, src)
 
 
 def _process_one(video: Path) -> tuple[str, int, int, bool]:

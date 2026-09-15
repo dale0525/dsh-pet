@@ -1,0 +1,22 @@
+subject_definitions:
+<Picture 1> is the opening-frame target (best effort) for <Subject 1>: the dog standing on all four legs, facing the camera dead-on on a flat pure green chroma-key background, mouth slightly open with the pink tongue out, tail hanging down behind.
+<Picture 2> is the ending-frame target (best effort) for <Subject 1>: exactly the same standing pose as <Picture 1> — the action must end where it began so the clip loops without a jump.
+<Subject 1> is the long-haired golden-red miniature dachshund in <Picture 1> and <Picture 2>, with feathered golden-red fur, long drooping feathered ears, dark round eyes, a black nose, and a lighter cream chest and front paws. Its short legs and long low body are part of the identity.
+
+summary:
+[reference generation] The target video is a single continuous static shot of <Subject 1> trotting in place with tiny shuffling steps on a flat chroma-key green background. Over an effective duration of 10 seconds the dog stays anchored to the exact same spot on the floor while all four paws alternate in a brisk, rhythmic march directly underneath its body as if on a treadmill. Its body bobs subtly with each step, its feathered ears bounce, and its tail swishes rhythmically, but its center of mass never moves in X or Y. After a steady run of steps, the trotting slows and halts, settling cleanly back into the exact standing pose shown in <Picture 2>. The silhouette remains strictly centered throughout with generous green margins on all four sides.
+
+retention_analysis:
+<Subject 1> (appears throughout): fully_preserved - the golden-red feathered fur, long drooping feathered ears, dark round eyes, black nose, cream chest and front paws, short legs and long low body are all retained.
+<Picture 1>: partially_preserved - opening-frame target (best effort); the standing pose, the front-on head position, the open mouth with the pink tongue out, and the hanging tail guide the first frame.
+<Picture 2>: partially_preserved - ending-frame target (best effort); it is the same standing pose as <Picture 1>, so the last second returns to the opening configuration for a seamless loop.
+The flat pure green background is fully retained on every frame, with no shadows, no props, no text and no added objects.
+
+detailed_description:
+A single continuous shot on a flat chroma-key green background, no cuts and no camera movement. A static medium shot of <Subject 1> standing on all four legs, facing the camera dead-on, centered in the frame. [Shot 1] The dog begins in the standard standing pose of <Picture 1>, still and composed. From 00:01.000 the dog initiates a trot strictly in place: its four short legs begin lifting and planting in quick, tiny alternating steps directly beneath its chest and hips, front-left and rear-right pairing smoothly with front-right and rear-left. Through 00:03.000 the march gathers a brisk, energetic cadence; the paws lift only an inch off the floor and stamp right back down onto the same footprint, creating an impression of lively forward momentum while the dog remains completely stationary in space. From 00:03.000 through 00:07.000 the dog sustains this steady, enthusiastic marching pace: its long spine and chest bob with a tiny resilient vertical rhythm, its long drooping feathered ears bounce perkily in time with the footfalls, and its tail stays raised behind, swaying rhythmically from side to side. Throughout this march, the dog faces forward with bright eyes and tongue out; its body outline never widens, its horizontal center never shifts, and its paw impacts never drift outside the baseline ground circle. From 00:07.000 the stepping tempo gradually decelerates: the steps become softer and deliberate, the vertical bobbing subsides, and the tail sway calms down. Through 00:08.800 all four paws plant firmly and come to a complete halt side by side. By 00:10.000 the dog stands perfectly still in exactly the standing pose of <Picture 2>, matching <Picture 1> frame for frame — same paw positions, same head height, same tail position, and relaxed tongue out. The dog never travels across the screen, never turns off-axis, and never shifts laterally; its silhouette stays centered in the frame with generous green margin on every side.
+
+overall_soundscape:
+Quiet indoor room tone, very low in the mix, with the soft, rapid, rhythmic pitter-patter of tiny dog paw pads tapping on a smooth floor, paired with a happy, gentle breathing rhythm. No music, no speech and no other animal sounds.
+
+non_diegetic_music:
+N/A

@@ -495,6 +495,9 @@ npm publish --tag latest   # npm publish 自动执行 prepare 钩子（构建完
 ├── scripts/           # ② 素材生成链（Python/ffmpeg：水印 → 抠像 → 归一化 → 转码 → GIF 预览）
 ├── step01~04/         # ② 素材链中间产物（不入库）
 ├── pr/  prproj/       # ② 路线 B：PR 手工抠像输入与工程（本地工作数据，不入库）
+├── pets/              # 额外宠物（pet pack）的源资产，一目录一只：pets/<种类名>/
+│   └── dachshund/     #   腊肠犬：prompts/ 提示词 · frames/ 首尾帧 · raw/ 图生图原图
+│                      #           h3/ H3 成片 · reports/ 成本溯源 · 评估器与单测
 ├── tools/             # 开发小工具（素材链各阶段预览等）
 ├── assets/            # 仓库展示用截图
 ├── .github/workflows/ # CI：Safari/HEVC 转码流水线（macOS runner，手动触发 → 发布 assets-mov Release）

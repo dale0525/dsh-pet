@@ -20,9 +20,13 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "step02"
 OUT = ROOT / "step03"
-# 统一使用工作区自带的 ffmpeg（素材处理链零第三方依赖）
-FFMPEG = str(ROOT / ".tools" / "ffmpeg-9.0.1-essentials_build" / "bin" / "ffmpeg.exe")
-FFPROBE = str(ROOT / ".tools" / "ffmpeg-9.0.1-essentials_build" / "bin" / "ffprobe.exe")
+try:
+    from _tools import ffmpeg, ffprobe, same_duration
+except ImportError:
+    from scripts._tools import ffmpeg, ffprobe, same_duration
+
+FFMPEG = ffmpeg()
+FFPROBE = ffprobe()
 
 PARALLEL = 4
 CANVAS_W = 2160  # 16:9：2160 = 1215 * 16/9，与原始视频同比例
@@ -173,14 +177,20 @@ def convert_video(src: Path, dst: Path, filter_complex: str) -> None:
 
 
 def _is_valid(dst: Path, src: Path, min_size: int = 50_000) -> bool:
-    """断点续跑完整性检查：存在、够大、不比源旧、且能被 ffprobe 读到视频流。"""
+    """断点续跑完整性检查：存在、够大、不比源旧、能被 ffprobe 读到视频流，**且时长与源一致**。
+
+    最后一条是防截断：进程被杀（超时 / Ctrl-C）时留下的 webm 往往是完整可解码的前缀，
+    前三条判据全过——实测事故见 `_tools.same_duration` 的 docstring。
+    """
     if not dst.exists() or dst.stat().st_size <= min_size:
         return False
     if dst.stat().st_mtime < src.stat().st_mtime:
         return False
     r = subprocess.run([FFPROBE, "-v", "error", "-show_entries", "stream=codec_name",
                         "-of", "csv=p=0", str(dst)], capture_output=True)
-    return bool(r.stdout.strip())
+    if not r.stdout.strip():
+        return False
+    return same_duration(dst, src)
 
 
 def _process_one(video: Path) -> tuple[dict, bool]:

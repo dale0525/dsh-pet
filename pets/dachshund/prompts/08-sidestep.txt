@@ -1,0 +1,22 @@
+subject_definitions:
+<Picture 1> is the opening-frame target (best effort) for <Subject 1>: the dog standing on all four legs, facing the camera dead-on on a flat pure green chroma-key background, mouth slightly open with the pink tongue out, tail hanging down behind.
+<Picture 2> is the ending-frame target (best effort) for <Subject 1>: exactly the same standing pose as <Picture 1> — the action must end where it began so the clip loops without a jump.
+<Subject 1> is the long-haired golden-red miniature dachshund in <Picture 1> and <Picture 2>, with feathered golden-red fur, long drooping feathered ears, dark round eyes, a black nose, and a lighter cream chest and front paws. Its short legs and long low body are part of the identity.
+
+summary:
+[reference generation] The target video is a single continuous static shot of <Subject 1> performing a lateral crab-walk sidestep in place on a flat chroma-key green background. Over an effective duration of 10 seconds the dog tilts its stance slightly and shuffles its four paws laterally under its body in a continuous crab-walk motion, conveying a lively sideways gliding momentum without shifting its actual X or Y screen coordinates. The head stays close to the chest, the tail tilts gently to counterbalance, and the entire silhouette remains strictly centered in the frame. The shuffling then decelerates, the body straightens, and the dog settles seamlessly back into the exact standing pose shown in <Picture 2>.
+
+retention_analysis:
+<Subject 1> (appears throughout): fully_preserved - the golden-red feathered fur, long drooping feathered ears, dark round eyes, black nose, cream chest and front paws, short legs and long low body are all retained.
+<Picture 1>: partially_preserved - opening-frame target (best effort); the standing pose, the front-on head position, the open mouth with the pink tongue out, and the hanging tail guide the first frame.
+<Picture 2>: partially_preserved - ending-frame target (best effort); it is the same standing pose as <Picture 1>, so the last second returns to the opening configuration for a seamless loop.
+The flat pure green background is fully retained on every frame, with no shadows, no props, no text and no added objects.
+
+detailed_description:
+A single continuous shot on a flat chroma-key green background, no cuts and no camera movement. A static medium shot of <Subject 1> standing on all four legs, facing the camera dead-on, centered in the frame. [Shot 1] The dog begins in the standard standing pose of <Picture 1>. From 00:01.000 the dog prepares a lateral glide: its head turns about ten degrees toward its left with eyes fixed sideways, and its body tilts slightly by about ten degrees into the direction of movement. At 00:01.800 the dog initiates an energetic lateral sidestep strictly in place: the left front and rear paws take small lateral shuffling steps to the side, and the right paws instantly close in behind them in quick succession underneath the torso, establishing a brisk crab-walking cadence. From 00:03.000 through 00:07.000 the dog sustains this steady lateral shuffling momentum in place: the four short legs cycle smoothly through rapid side-stepping shuffle footwork directly below the body, creating the dynamic illusion of gliding sideways while its center of mass remains locked firmly on the central vertical axis. The head stays nestled close to the chest, the tail curves slightly outward to maintain balance, and the outline never broadens or sways toward the frame boundaries. From 00:07.000 the lateral shuffling tempo slows down: the steps become shorter and deliberate, the body tilt eases back toward vertical, and the feet align side by side. Through 00:08.800 the shuffling ceases completely; the dog straightens its posture, faces the camera dead-on, and lets its tail relax. By 00:10.000 the dog stands perfectly still in exactly the standing pose of <Picture 2>, matching <Picture 1> frame for frame — same paw positions, same head height, same tail position, and relaxed tongue out. The dog never translates across the screen, never breaks from its central anchor, and keeps generous green margin around its silhouette at all times.
+
+overall_soundscape:
+Quiet indoor room tone, very low in the mix, with the soft continuous sound of small paws scuffing and tapping sideways on a hard floor, paired with a steady, quiet breathing rhythm. No music, no speech and no other animal sounds.
+
+non_diegetic_music:
+N/A

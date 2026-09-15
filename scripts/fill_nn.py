@@ -17,7 +17,12 @@ import numpy as np
 from scipy.ndimage import distance_transform_edt
 
 ROOT = Path(__file__).resolve().parent.parent
-FFMPEG = str(ROOT / ".tools" / "ffmpeg-9.0.1-essentials_build" / "bin" / "ffmpeg.exe")
+try:
+    from _tools import ffmpeg
+except ImportError:
+    from scripts._tools import ffmpeg
+
+FFMPEG = ffmpeg()
 W, H, FPS = 1280, 720, 24
 
 

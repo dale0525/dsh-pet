@@ -25,9 +25,13 @@ OUT = ROOT / "step01"
 MASK = SRC / "watermark_mask_v5.mkv"
 K = 5
 PARALLEL = 4
-# 统一使用工作区自带的 ffmpeg（素材处理链零第三方依赖）
-FFMPEG = str(ROOT / ".tools" / "ffmpeg-9.0.1-essentials_build" / "bin" / "ffmpeg.exe")
-FFPROBE = str(ROOT / ".tools" / "ffmpeg-9.0.1-essentials_build" / "bin" / "ffprobe.exe")
+try:
+    from _tools import ffmpeg, ffprobe
+except ImportError:
+    from scripts._tools import ffmpeg, ffprobe
+
+FFMPEG = ffmpeg()
+FFPROBE = ffprobe()
 sys.path.insert(0, str(ROOT / "scripts"))
 from fill_nn import fill_nn  # noqa: E402
 

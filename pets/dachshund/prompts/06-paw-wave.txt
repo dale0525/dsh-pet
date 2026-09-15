@@ -1,0 +1,22 @@
+subject_definitions:
+<Picture 1> is the opening-frame target (best effort) for <Subject 1>: the dog standing on all four legs, facing the camera dead-on on a flat pure green chroma-key background, mouth slightly open with the pink tongue out, tail hanging down behind.
+<Picture 2> is the ending-frame target (best effort) for <Subject 1>: exactly the same standing pose as <Picture 1> — the action must end where it began so the clip loops without a jump.
+<Subject 1> is the long-haired golden-red miniature dachshund in <Picture 1> and <Picture 2>, with feathered golden-red fur, long drooping feathered ears, dark round eyes, a black nose, and a lighter cream chest and front paws. Its short legs and long low body are part of the identity.
+
+summary:
+[reference generation] The target video is a single continuous static shot of <Subject 1> lifting one front paw to wave in place on a flat chroma-key green background. Over an effective duration of 10 seconds the dog responds cheerily: it shifts its weight to three planted paws, lifts its right front paw high before its chest in a lively beckoning wave toward the camera, wags its tail happily, tilts its head with a playful blink, and then lowers the paw smoothly back to the floor to return to the exact standing pose shown in <Picture 2>. The lifted paw stays directly in front of the chest and never flares out toward the side borders, keeping the silhouette compact and strictly centered in the frame.
+
+retention_analysis:
+<Subject 1> (appears throughout): fully_preserved - the golden-red feathered fur, long drooping feathered ears, dark round eyes, black nose, cream chest and front paws, short legs and long low body are all retained.
+<Picture 1>: partially_preserved - opening-frame target (best effort); the standing pose, the front-on head position, the open mouth with the pink tongue out, and the hanging tail guide the first frame.
+<Picture 2>: partially_preserved - ending-frame target (best effort); it is the same standing pose as <Picture 1>, so the last second returns to the opening configuration for a seamless loop.
+The flat pure green background is fully retained on every frame, with no shadows, no props, no text and no added objects.
+
+detailed_description:
+A single continuous shot on a flat chroma-key green background, no cuts and no camera movement. A static medium shot of <Subject 1> standing on all four legs, facing the camera dead-on, centered in the frame. [Shot 1] The dog begins in the standard standing pose of <Picture 1>. From 00:00.800 to 00:01.800 the dog perks up in cheerful reaction to a tap: its dark eyes widen with happy anticipation, and it smoothly shifts its weight to support itself on both rear paws and the left front paw. At 00:02.000 the right front paw lifts off the ground and rises up to mid-chest height, its soft front paw pads facing directly toward the lens. From 00:02.500 to 00:04.500 the dog performs a delightful beckoning wave: the raised right paw flexes and pumps forward and back in three small, spirited waving gestures directly in front of its cream chest, while the tail behind wags briskly with rhythmic joy. Throughout this wave, the raised paw stays tucked neatly within the central chest profile and never swings out toward the lateral frame border. Through 00:06.500 the waving motion slows into a gentle hold; the dog tilts its head slightly to one side with an affectionate expression, blinks both eyes warmly, and lets its pink tongue hang out in a happy doggy grin. From 00:07.000 the right front leg gently extends downward, returning the paw softly and steadily to its original footprint on the ground. Through 00:08.500 the dog restores full four-point balance, head straightening back to face forward and tail wagging settling to a calm hang. By 00:10.000 the dog stands perfectly still on all four legs in exactly the standing pose of <Picture 2>, matching <Picture 1> frame for frame — same paw positions, same head height, same tail position, and relaxed tongue out. The dog never takes steps away, never translates in X or Y, and keeps generous green margin around its silhouette at all times.
+
+overall_soundscape:
+Quiet indoor room tone, very low in the mix, with the soft swish of a wagging tail against the air, a tiny happy breathy pant, and the soft faint tap of the paw pad planting back down onto the floor. No music, no speech and no other animal sounds.
+
+non_diegetic_music:
+N/A

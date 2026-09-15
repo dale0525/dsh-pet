@@ -1,0 +1,281 @@
+{
+  "admission_rate_usd_per_hour": 8.0,
+  "attempt": 1,
+  "client_timing": {
+    "local_postprocess_seconds": 2.428,
+    "modal_command_seconds": 84.0
+  },
+  "cost": {
+    "estimated_cold_start_gpu_upper_bound_usd": 0.00535,
+    "estimated_generation_gpu_usd": 0.055681,
+    "estimated_submission_to_output_gpu_upper_bound_usd": 0.067571,
+    "estimated_worker_execution_gpu_usd": 0.062221
+  },
+  "credential_ref": "logictan89",
+  "durable_generated_video": "/state/outputs/0124a1caad858d446dba1ae6bd5c370ebcee10d5a0f3d21eb076a52299a39184/22b13fc9d353e73d5461b270ead7d7110e308fb0b39d74b82571c0a918d585d3/attempt-1/generated-243.mp4",
+  "elapsed_seconds": 73.897,
+  "estimated_gpu_cost_usd": 0.062221,
+  "ffprobe": {
+    "format": {
+      "bit_rate": "967416",
+      "duration": "10.000000",
+      "filename": "/Volumes/LogicExt/Git/dsh-pet/test/pet-dachshund/p4-h3-out/爪嘴并用拆礼物/output.mp4",
+      "format_long_name": "QuickTime / MOV",
+      "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+      "nb_programs": 0,
+      "nb_stream_groups": 0,
+      "nb_streams": 2,
+      "probe_score": 100,
+      "size": "1209271",
+      "start_time": "0.000000",
+      "tags": {
+        "compatible_brands": "isomiso2avc1mp41",
+        "encoder": "Lavf62.12.102",
+        "major_brand": "isom",
+        "minor_version": "512"
+      }
+    },
+    "streams": [
+      {
+        "avg_frame_rate": "24/1",
+        "bit_rate": "830802",
+        "bits_per_raw_sample": "8",
+        "chroma_location": "left",
+        "codec_long_name": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+        "codec_name": "h264",
+        "codec_tag": "0x31637661",
+        "codec_tag_string": "avc1",
+        "codec_type": "video",
+        "coded_height": 480,
+        "coded_width": 864,
+        "disposition": {
+          "attached_pic": 0,
+          "captions": 0,
+          "clean_effects": 0,
+          "comment": 0,
+          "default": 1,
+          "dependent": 0,
+          "descriptions": 0,
+          "dub": 0,
+          "forced": 0,
+          "hearing_impaired": 0,
+          "karaoke": 0,
+          "lyrics": 0,
+          "metadata": 0,
+          "multilayer": 0,
+          "non_diegetic": 0,
+          "original": 0,
+          "still_image": 0,
+          "timed_thumbnails": 0,
+          "visual_impaired": 0
+        },
+        "duration": "10.000000",
+        "duration_ts": 122880,
+        "extradata_size": 45,
+        "field_order": "progressive",
+        "has_b_frames": 2,
+        "height": 480,
+        "id": "0x1",
+        "index": 0,
+        "is_avc": "true",
+        "level": 30,
+        "mime_codec_string": "avc1.64001e",
+        "nal_length_size": "4",
+        "nb_frames": "240",
+        "nb_read_frames": "240",
+        "pix_fmt": "yuv420p",
+        "profile": "High",
+        "r_frame_rate": "24/1",
+        "refs": 4,
+        "start_pts": 0,
+        "start_time": "0.000000",
+        "tags": {
+          "encoder": "Lavc62.28.102 libx264",
+          "handler_name": "VideoHandler",
+          "language": "und"
+        },
+        "time_base": "1/12288",
+        "width": 864
+      },
+      {
+        "avg_frame_rate": "0/0",
+        "bit_rate": "129631",
+        "bits_per_sample": 0,
+        "channel_layout": "stereo",
+        "channels": 2,
+        "codec_long_name": "AAC (Advanced Audio Coding)",
+        "codec_name": "aac",
+        "codec_tag": "0x6134706d",
+        "codec_tag_string": "mp4a",
+        "codec_type": "audio",
+        "disposition": {
+          "attached_pic": 0,
+          "captions": 0,
+          "clean_effects": 0,
+          "comment": 0,
+          "default": 1,
+          "dependent": 0,
+          "descriptions": 0,
+          "dub": 0,
+          "forced": 0,
+          "hearing_impaired": 0,
+          "karaoke": 0,
+          "lyrics": 0,
+          "metadata": 0,
+          "multilayer": 0,
+          "non_diegetic": 0,
+          "original": 0,
+          "still_image": 0,
+          "timed_thumbnails": 0,
+          "visual_impaired": 0
+        },
+        "duration": "10.000000",
+        "duration_ts": 480000,
+        "extradata_size": 5,
+        "id": "0x2",
+        "index": 1,
+        "initial_padding": 0,
+        "mime_codec_string": "mp4a.40.2",
+        "nb_frames": "470",
+        "nb_read_frames": "469",
+        "profile": "LC",
+        "r_frame_rate": "0/0",
+        "sample_fmt": "fltp",
+        "sample_rate": "48000",
+        "start_pts": 0,
+        "start_time": "0.000000",
+        "tags": {
+          "handler_name": "SoundHandler",
+          "language": "und"
+        },
+        "time_base": "1/48000"
+      }
+    ]
+  },
+  "gpu": {
+    "configured_rate_usd_per_hour": 3.0312,
+    "configured_rate_usd_per_second": 0.0008420000000000001,
+    "gpu_memory_mib": 97887,
+    "gpu_name": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+    "gpu_sku": "RTX-PRO-6000",
+    "price_retrieved_at": "2026-08-10"
+  },
+  "gpu_candidates": [
+    "RTX-PRO-6000",
+    "B200"
+  ],
+  "gpu_telemetry": {
+    "average_utilization_gpu_percent": 73.746,
+    "driver_version": "580.95.05",
+    "interval_seconds": 1.0,
+    "memory_total_mib": 97887,
+    "minimum_memory_free_mib": 40320,
+    "peak_memory_used_mib": 56931,
+    "peak_utilization_gpu_percent": 100,
+    "sample_count": 71
+  },
+  "gpu_telemetry_by_phase": {
+    "comfy_startup": {
+      "average_utilization_gpu_percent": 0.0,
+      "minimum_memory_free_mib": 96692,
+      "peak_memory_used_mib": 559,
+      "peak_utilization_gpu_percent": 0,
+      "sample_count": 6
+    },
+    "model_reference_preprocessing": {
+      "average_utilization_gpu_percent": 29.75,
+      "minimum_memory_free_mib": 80870,
+      "peak_memory_used_mib": 16381,
+      "peak_utilization_gpu_percent": 62,
+      "sample_count": 8
+    },
+    "reference_preparation": {
+      "average_utilization_gpu_percent": 0.0,
+      "minimum_memory_free_mib": 97248,
+      "peak_memory_used_mib": 3,
+      "peak_utilization_gpu_percent": 0,
+      "sample_count": 1
+    },
+    "sampling": {
+      "average_utilization_gpu_percent": 95.744,
+      "minimum_memory_free_mib": 40320,
+      "peak_memory_used_mib": 56931,
+      "peak_utilization_gpu_percent": 100,
+      "sample_count": 43
+    },
+    "vae_decode": {
+      "average_utilization_gpu_percent": 85.9,
+      "minimum_memory_free_mib": 42760,
+      "peak_memory_used_mib": 54491,
+      "peak_utilization_gpu_percent": 100,
+      "sample_count": 10
+    },
+    "video_create_and_save": {
+      "average_utilization_gpu_percent": 7.333,
+      "minimum_memory_free_mib": 42696,
+      "peak_memory_used_mib": 54555,
+      "peak_utilization_gpu_percent": 22,
+      "sample_count": 3
+    }
+  },
+  "max_execution_seconds": 630,
+  "output_path": "/Volumes/LogicExt/Git/dsh-pet/test/pet-dachshund/p4-h3-out/爪嘴并用拆礼物/output.mp4",
+  "phase_durations": {
+    "comfy_startup_seconds": 7.015,
+    "generation_seconds": 66.13,
+    "model_reference_preprocessing_seconds": 8.056,
+    "output_finalize_seconds": 0.007,
+    "preflight_seconds": 0.69,
+    "reference_preparation_seconds": 0.046,
+    "sampling_seconds": 45.029,
+    "total_seconds": 73.897,
+    "vae_decode_seconds": 10.222,
+    "video_create_seconds": 0.001,
+    "video_save_seconds": 2.821
+  },
+  "request_id": "22b13fc9d353e73d5461b270ead7d7110e308fb0b39d74b82571c0a918d585d3",
+  "request_profile": {
+    "duration_seconds": 10.0,
+    "generation_frames": 243,
+    "output_frames": 240,
+    "reference_counts": {
+      "audios": 0,
+      "images": 2,
+      "videos": 0
+    },
+    "requested_duration_seconds": 10.0,
+    "schema": "dsh-novel.modal-h3.ref2va-turbo6.request.v2",
+    "steps": 6
+  },
+  "runtime": {
+    "comfy_commit": "62b3c94bd45154f6486c7abf1b9efcacee96ea69",
+    "cuda_image": "nvidia/cuda:13.0.3-cudnn-devel-ubuntu22.04",
+    "t8_commit": "5ff46c253192e9d8cae185280fd34f4b4add063b",
+    "torch": "2.11.0+cu130",
+    "torch_cuda": "13.0",
+    "torchaudio": "2.11.0+cu130",
+    "torchvision": "0.26.0+cu130"
+  },
+  "runtime_release": {
+    "comfy_commit": "62b3c94bd45154f6486c7abf1b9efcacee96ea69",
+    "cuda_image": "nvidia/cuda:13.0.3-cudnn-devel-ubuntu22.04",
+    "fingerprint": "0124a1caad858d446dba1ae6bd5c370ebcee10d5a0f3d21eb076a52299a39184",
+    "graph_sha256": "9eb9e88873fd88e3d54ed2effe1edb9a35399d7d297918b37e27a3351d659058",
+    "manifest_schema": "dsh-novel.modal-h3.ref2va-turbo6.manifest.v1",
+    "manifest_sha256": "9e2fd6133940f25f299260aa631ce8b7f4e26cfa455a00247117e616fc3357b9",
+    "schema": "dsh-novel.modal-h3.runtime-release.v1",
+    "t8_commit": "5ff46c253192e9d8cae185280fd34f4b4add063b",
+    "torch": "2.11.0+cu130",
+    "torchaudio": "2.11.0+cu130",
+    "torchvision": "0.26.0+cu130",
+    "worker_contract_revision": "2026-08-12-turbo6-ref2va-media-map-v5"
+  },
+  "schema": "dsh-novel.modal-h3.ref2va-turbo6.report.v2",
+  "t8_commit": "5ff46c253192e9d8cae185280fd34f4b4add063b",
+  "timing": {
+    "actual_generation_seconds": 66.13,
+    "observed_cold_start_upper_bound_seconds": 6.354,
+    "submission_to_output_seconds": 80.251,
+    "worker_execution_seconds": 73.897
+  }
+}

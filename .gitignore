@@ -1,4 +1,7 @@
 # ── 素材处理链中间产物（跑 scripts/*.py 可再生，不入仓库） ──
+#   step00/  H3 原始 864x480（bridge_step00.py 的默认输入；成片已入库在 pets/*/h3/）
+#   step01..04  桥接→抠像→归一化→转码逐级产物
+step00/
 step01/
 step02/
 step03/
@@ -15,6 +18,12 @@ prproj/
 
 # ── 本地工具（机器相关，不入仓库） ──
 .tools/
+
+# ── pixi 环境目录（pixi.toml 才是环境定义，须入库；环境本身在本机重建） ──
+.pixi/
+
+# ── 测试资产（2026-09 裁定不入 git；pet pack 的资产与工具已迁到 pets/<种类名>/，见 pets/dachshund/README.md） ──
+test/pet1/
 
 # ── Python ──
 __pycache__/
