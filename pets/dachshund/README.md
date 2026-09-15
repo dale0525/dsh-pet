@@ -22,7 +22,7 @@ pets/dachshund/
 | 目录 | 内容 | 为什么留着 |
 | --- | --- | --- |
 | `prompts/` | 20 个动作的 H3 提示词 | **新增动画的起点**：改一份提示词即可生成新动作 |
-| `frames/` | `base-standing.png`（身份基准）+ `turn-side-left/right.png` | **身份锚点**：18 个动作共用同一张首尾帧，保证形象与缩放一致 |
+| `frames/` | `base-standing.png`（身份基准）+ `turn-side-left/right.png` | **身份锚点**：除 `turn` 外的 19 个动作共用同一张首尾帧，保证形象与缩放一致 |
 | `raw/` | `base-standing-raw-1.png`、`base-standing-side-raw-1.png` | `frames/` 的图生图原图；**换形象时从这里重跑** |
 | `h3/` | 20 个 H3 成片（扁平、`<动作名>.mp4`） | **不必重复付费**：改抠像/归一化算法后可直接重跑下游 |
 | `reports/` | 20 份 `report.json` | 成本与溯源；排查「哪次生成用了什么参数」 |
@@ -70,7 +70,7 @@ pixi run thumbs     # step03/ → step04/
 2. **生成 H3**：用 `agentnovel_modal_h3.py run --duration-seconds 10`，两张参考图都传该首帧。
    **这是唯一花钱的一步**（本包 20 段实测单段 $0.055–0.107，见 `reports/*.json`）。
 3. **落盘**：成片存为 `h3/<动作名>.mp4`，成本记录存为 `reports/<动作名>.json`。
-4. **跑下游**：从 `h3/` 经 ③→⑥ 产出 `step04/<动作名>.webm`。
+4. **跑下游**：从 `h3/` 经 ④→⑥ 产出 `step04/<动作名>.webm`（③ 已完成，`h3/` 就是它的产物）。
 5. **接进配置**：把动作名加进 `$DSH_HOME/dsh-pet/pet/dachshund-config.json` 的某个池，
    并把 `step04/*.webm` 拷进 `dachshund-animation/`。宿主每次读配置，**刷新页面即生效**，无需重启。
 
@@ -111,8 +111,11 @@ pixi run python pets/dachshund/evaluate_dachshund.py video pets/dachshund/h3/待
 
 ## 依赖与边界
 
+- **③ 的生成器不在本仓库**：`agentnovel_modal_h3.py` 是外部工程的脚本（本仓库只引用它）。
+  即「重新生成 H3」这一步**无法仅凭本仓库复现**；能复现的是 **④→⑥**（从入库的 `h3/` 起跑）。
+  这也是把 `h3/` 成片入库的核心理由——它把不可复现的付费步骤固化下来。
 - **评估器依赖 `test/pet1/`**（未入 git，按规格 §11 裁定 5）。缺失时**显式报错并给出补救指引**，
-  不静默降级——门禁宁可报错也不假装通过。
+  不静默降级——门禁宁可报错也不假装通过（实测：缺 `test/pet1/` 时 `evaluate_dachshund.py` 退出码 1）。
 - **运行环境**：`pixi.toml`（仓库根）定义了 numpy/scipy/pillow/ffmpeg；`.pixi/` 本机重建，不入库。
 - **`test/pet1/` 不随本目录走**：它是本 pack 之前的 5 秒验证产物，按裁定不入版本库。
 
@@ -130,6 +133,7 @@ $DSH_HOME/dsh-pet/pet/
 
 ## 许可与署名
 
-素材沿用仓库根 `LICENSE` 的约定：允许开源使用、**禁止商用**。
+素材沿用仓库根 `README.md`「许可」一节的约定（`README.md:516-517`，注意不在 `LICENSE` 里——
+`LICENSE` 是纯 MIT）：允许开源使用、**禁止商用**。
 **二创署名义务**：基于本项目的衍生 / 改版 / 换皮作品，在任何介绍、展示、分发该作品的地方，
 须附上原作者 GitHub 地址 <https://github.com/PC2005-cloud/dsh-pet>。fork 与自有仓库维护不豁免该义务。
