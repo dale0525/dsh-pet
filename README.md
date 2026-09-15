@@ -86,6 +86,7 @@ dsh plugin --profile web add file:D:/path/to/dsh-pet
 - **pet pack（额外宠物种类）**：`pet/` 下建 `种类名-config.json` + `种类名-animation/` 即新增独立动画池与素材的全新种类，多实例共享素材（见「配置 → 方式四」）
 - **自定义动画**：往 `main-animation/webm/` 放 VP9-Alpha 的 `.webm` 即为新动画，优先于包内素材
 - **无障碍**：支持 `prefers-reduced-motion`（减少动效时跳过 Q 弹挤压与淡入切换）
+- **移动端自动禁用**：触摸设备或窗口宽度小于 768px 时，宠物 overlay **整体不挂载**——不只是不显示，连配置拉取与余额/工作状态/碎碎念轮询都不会发出；窗口缩放 / 旋转 / 插拔鼠标时实时跟随。设置页与系统通知不受影响；桌面模式跑在宿主机器上，与此判定无关
 
 ## 兼容性
 
@@ -93,6 +94,7 @@ dsh plugin --profile web add file:D:/path/to/dsh-pet
 - **无头 / 无桌面环境**：支持 Linux headless 等无图形会话——桌面模式自动检测显示环境（Linux 无 `DISPLAY` / `WAYLAND_DISPLAY` 时判定无显示、跳过桌面窗口，仅日志告警），浏览器 overlay 不受影响
 - **浏览器**：浏览器 overlay 兼容 **Chromium 内核（Chrome / Edge 等）与 Firefox**——透明动画依赖 VP9-Alpha webm，三者均已实测透明确认；**不支持 Safari**（macOS 不认 webm alpha，透明渲染为黑底）——macOS 用 `.mov` 素材（GitHub Release `assets-mov`），下载放入 + 改 `ANIMATION_EXT` 变量即可（见「②.5 Safari/HEVC 兼容素材」）
 - **多显示器**：支持多屏环境——跨屏漫游/抛掷以各屏工作区为界，异构缩放（各屏 DPI 不同）、任务栏条带、屏幕之间空洞均正确判定（横屏 / 竖屏 / 上下叠放皆可）
+- **移动端**：触摸设备或窗口宽度小于 768px 时宠物**自动禁用**——overlay 整体不挂载，配置拉取与余额/工作状态/碎碎念轮询都不发出；设置页与系统通知照常，桌宠配置可在移动端编辑（见「插件功能」末条）
 
 ## 🪟 桌面模式（可选，脱离浏览器）
 
