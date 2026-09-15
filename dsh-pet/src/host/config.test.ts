@@ -10,7 +10,7 @@
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -218,6 +218,85 @@ describe('planConfigSave —— 表情包配图开关（白名单 + 透传保留
     );
     assert.equal(out?.whisperImageEnabled, true); // 请求体优先
     assert.equal(out?.chatImageEnabled, true); // 未传的旧值仍透传保留
+  });
+});
+
+describe('readAllConfig —— 显式空 pets = 零宠物（不复活内置默认宠物）', () => {
+  /** 建一个「内置默认 + 主条目用户层 + 可选 pack 文件」的临时目录 */
+  function fixture(overlay: Record<string, unknown>, pack?: Record<string, unknown>): ConfigPaths {
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-pet-empty-test-'));
+    const paths: ConfigPaths = {
+      defaultFile: join(dir, 'default.jsonc'),
+      userFile: join(dir, 'main-config.json'),
+      petDir: join(dir, 'pet'),
+    };
+    writeFileSync(paths.defaultFile, JSON.stringify(BASE));
+    writeFileSync(paths.userFile, JSON.stringify(overlay));
+    if (pack) {
+      mkdirSync(paths.petDir, { recursive: true });
+      writeFileSync(join(paths.petDir, 'dachshund-config.json'), JSON.stringify(pack));
+    }
+    return paths;
+  }
+
+  test('main 写 pets: [] → 读回空数组（设置页删光宠物后不得复活默认宠物）', () => {
+    const paths = fixture({ pets: [], notificationsEnabled: true });
+    try {
+      const merged = readAllConfig(paths);
+      assert.deepEqual(merged.main.pets, []);
+      assert.equal(merged.main.notificationsEnabled, true); // 顶层字段照常合并
+      assert.equal(merged.main.whisperPrompt, BASE.whisperPrompt);
+    } finally {
+      rmSync(join(paths.userFile, '..'), { recursive: true, force: true });
+    }
+  });
+
+  test('main 完全没写 pets → 仍回退内置默认（「没配置」与「配置成零只」是两回事）', () => {
+    const paths = fixture({ notificationsEnabled: true });
+    try {
+      assert.deepEqual(readAllConfig(paths).main.pets, BASE.pets);
+    } finally {
+      rmSync(join(paths.userFile, '..'), { recursive: true, force: true });
+    }
+  });
+
+  test('pack 文件写 pets: [] → 该条目零实例（不回退默认，不产生重复 id 的幽灵实例）', async () => {
+    const paths = fixture({ pets: [] }, { pets: [], whisperPrompt: '只有人设' });
+    try {
+      const { flattenPetList } = await import('./config.ts');
+      const merged = readAllConfig(paths);
+      assert.deepEqual(merged.dachshund.pets, []);
+      assert.equal(merged.dachshund.whisperPrompt, '只有人设'); // 条目级字段仍在
+      assert.deepEqual(flattenPetList(merged), []); // 全局零宠物
+    } finally {
+      rmSync(join(paths.userFile, '..'), { recursive: true, force: true });
+    }
+  });
+
+  test('pack 文件没写 pets → 该条目零实例（旧实现回退默认实例 = id 与主宠重复的幽灵）', async () => {
+    const paths = fixture({ pets: BASE.pets }, { whisperPrompt: '只有人设' });
+    try {
+      const { flattenPetList } = await import('./config.ts');
+      const merged = readAllConfig(paths);
+      assert.deepEqual(merged.dachshund.pets, []);
+      // 关键：拍平后 id 不重复（旧实现会得到 [main, main]）
+      const ids = flattenPetList(merged).map((p) => p.id);
+      assert.deepEqual(ids, ['main']);
+    } finally {
+      rmSync(join(paths.userFile, '..'), { recursive: true, force: true });
+    }
+  });
+
+  test('pack 文件声明的实例全被跳过（id 非法）→ 零实例，不塞回默认宠物', async () => {
+    const paths = fixture({ pets: [] }, { pets: [{ id: 'a/b', size: 300 }] });
+    try {
+      const { flattenPetList } = await import('./config.ts');
+      const merged = readAllConfig(paths);
+      assert.deepEqual(merged.dachshund.pets, []);
+      assert.deepEqual(flattenPetList(merged), []);
+    } finally {
+      rmSync(join(paths.userFile, '..'), { recursive: true, force: true });
+    }
   });
 });
 

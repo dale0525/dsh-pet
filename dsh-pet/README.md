@@ -107,7 +107,7 @@ macOS 的 Safari/WKWebView 下透明动画需用 `.mov` 素材，三步：
 | `notificationsEnabled`         | 系统通知总开关（布尔，默认开）：对话完成 / 生成失败 / 输出截断 / 权限申请 / 用户选择，在窗口失焦时弹系统级通知（桌面右下角）                                                                                                                                                                                                                                                                                          |
 | `physics`（0.2.5）             | 拖拽抛掷物理参数（全局，所有宠物共用）：`gravity` 重力 / `restitution` 碰壁恢复系数（0~1）/ `groundFriction` 地面摩擦 / `ceilingBounce` 顶部反弹 / `throwPower` 总力度 / `petCollision` 多宠物碰撞开关；缺省取内置默认（1400 / 0.78 / 2.5 / true / 1.0 / false）；`gravity=0` 为无重力，`petCollision=true` 开启多宠物碰撞                                                                                            |
 
-> 说明：插件安装即用，配置均为可选；设置页保存的用户覆盖写入 `$DSH_HOME/dsh-pet/main-config.json`（用户层，优先于包内默认）。
+> 说明：插件安装即用，配置均为可选；设置页保存的用户覆盖写入 `$DSH_HOME/dsh-pet/main-config.json`（用户层，优先于包内默认）。主配置**没写** `pets` 时回退内置默认宠物；写 `pets: []` 就是**真的零只**（设置页可把宠物全部删光，此时不显示任何宠物，配置与开关保留）。文件宠物文件不同：**没写** `pets` 或写 `[]` 都 = 该种类没有实例，不会凭空冒出默认宠物。
 
 ### 📄 高级自定义（直接编辑配置文件）
 

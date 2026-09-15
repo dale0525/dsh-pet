@@ -242,18 +242,21 @@ function mergeEventsRefreshSec(base: unknown, overlay: unknown, label: string): 
   return out;
 }
 
-/** 一个覆盖文件 → 完整条目：顶层逐字段合并（没写/非法 → 内置默认 + 告警），pets 逐实例 */
+/** 一个覆盖文件 → 完整条目：顶层逐字段合并（没写/非法 → 内置默认 + 告警），pets 逐实例。
+ *
+ *  `fallbackPets` = 该条目**没写 pets** 时的宠物列表（main 条目 = 内置默认；文件宠物 = 空）。 */
 function mergeEntry(
   base: Record<string, unknown>,
   overlay: Record<string, unknown> | undefined,
   label: string,
   basePets: Record<string, unknown>[],
   seenIds: Set<string>,
+  fallbackPets: Record<string, unknown>[],
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const key of Object.keys(base)) {
     if (key === 'pets') {
-      out.pets = mergePets(basePets, overlay?.[key], label, seenIds);
+      out.pets = mergePets(basePets, overlay?.[key], label, seenIds, fallbackPets);
       continue;
     }
     if (key === 'eventsRefreshSec') {
@@ -277,26 +280,44 @@ function mergeEntry(
   return out;
 }
 
-/** pets 数组合并：文件没写/空 → 默认列表；逐实例合并（缺字段 → 内置默认 pets[0]，静默）。 */
+/** pets 数组合并：**字段缺失**才回退默认列表；显式写了（哪怕是 `[]`）一律按字面处理。
+ *
+ *  `[]` 与「没写」必须分开：设置页删光宠物后写下的正是 `pets: []`，
+ *  若把空数组也当「缺失」回退成内置默认宠物，删除会在下次加载时复活，形同虚设。
+ *
+ *  `fallback` 决定「字段缺失」时的行为——两种条目语义不同：
+ *   - main 条目（fallback = basePets）：用户从没配置过 → 用内置默认宠物，符合「开箱即用」；
+ *   - 文件宠物条目（fallback = []）：pack 文件没声明实例就是**没有实例**。若回退默认宠物，
+ *     它的 id 恰好是 `main`，会与主宠重名——拍平后得到两只 id 相同的宠物（幽灵实例）。
+ *
+ *  显式 `[]` 与「声明的实例全被跳过」都返回空数组（不再回退）：前者是用户意图，
+ *  后者是配置错误（实例 id 非法/重复），塞一只默认宠物进去只会掩盖问题、再造重复 id。 */
 function mergePets(
   basePets: Record<string, unknown>[],
   raw: unknown,
   label: string,
   seenIds: Set<string>,
+  fallback: Record<string, unknown>[],
 ): Record<string, unknown>[] {
   const basePet: Record<string, unknown> = basePets[0] ?? {};
-  if (!Array.isArray(raw) || raw.length === 0) {
-    warnOnce(`${label}:pets`, `「${label}」的 pets 缺失或为空，已取默认宠物列表`);
-    return basePets;
+  if (!Array.isArray(raw)) {
+    // 告警文案必须跟着 fallback 走：pack 条目回退的是「零实例」，说成「已取默认宠物列表」是假话
+    warnOnce(
+      `${label}:pets`,
+      fallback.length > 0 ? `「${label}」的 pets 缺失，已取默认宠物列表` : `「${label}」的 pets 缺失，按零实例处理`,
+    );
+    return fallback;
   }
   const out: Record<string, unknown>[] = [];
   for (const item of raw) {
     const pet = mergePet(basePet, item, label, seenIds);
     if (pet) out.push(pet);
   }
-  if (out.length === 0) {
-    warnOnce(`${label}:pets`, `「${label}」的 pets 全部被跳过（id 非法/重复/冲突），已取默认宠物列表`);
-    return basePets;
+  if (out.length < raw.length) {
+    warnOnce(
+      `${label}:pets`,
+      `「${label}」有 ${raw.length - out.length} 只实例被跳过（id 非法/重复/冲突），已跳过这些实例`,
+    );
   }
   return out;
 }
@@ -388,21 +409,23 @@ export function readAllConfig(paths: ConfigPaths): Record<string, Record<string,
   const seenIds = new Set<string>();
   const out: Record<string, Record<string, unknown>> = {};
 
-  // main 条目：内置默认 ← main-config.json（可编辑层）
+  // main 条目：内置默认 ← main-config.json（可编辑层）。没写 pets → 内置默认宠物（开箱即用）
   const mainOverlay = readJsonc(paths.userFile);
   if (existsSync(paths.userFile) && !mainOverlay) {
     warnOnce('file:' + paths.userFile, '用户主配置解析失败，已按无用户配置处理：' + paths.userFile);
   }
-  out.main = mergeEntry(base, mainOverlay, 'main-config.json', basePets, seenIds);
+  out.main = mergeEntry(base, mainOverlay, 'main-config.json', basePets, seenIds, basePets);
 
-  // 文件宠物条目：pet/<名>-config.json，一个文件一个条目（key = 文件名前缀 = 素材根）
+  // 文件宠物条目：pet/<名>-config.json，一个文件一个条目（key = 文件名前缀 = 素材根）。
+  // 没写 pets → 零实例（不是默认宠物）：pack 文件不声明实例就是没有实例，回退默认只会
+  // 造出 id 与主宠重复的幽灵实例（见 mergePets 注释）。
   for (const file of scanPetFiles(paths.petDir)) {
     const parsed = readJsonc(file.path);
     if (!parsed) {
       warnOnce('file:' + file.path, '文件宠物配置解析失败，已跳过：' + file.path);
       continue;
     }
-    out[file.prefix] = mergeEntry(base, parsed, file.prefix + '-config.json', basePets, seenIds);
+    out[file.prefix] = mergeEntry(base, parsed, file.prefix + '-config.json', basePets, seenIds, []);
   }
   return out;
 }
@@ -434,7 +457,10 @@ export function findPetInstance(
 function cleanPet(p: unknown): Record<string, unknown> | null {
   if (!p || typeof p !== 'object') return null;
   const pp = p as Record<string, unknown>;
-  const id = String(pp.id ?? '');
+  // id 归一化必须与读路径 mergePet（`p.id.trim()`）完全一致：读侧 trim、写侧不 trim 的话，
+  // 提交 ' d1 ' 会落盘成带空格的 id，而读取端读出来是 'd1'——同一个宠物在读写两侧是两个 id，
+  // 归属表按 'd1' 找不到它，实例被误分流进 main-config.json，用户改的值静默丢失。
+  const id = String(pp.id ?? '').trim();
   // 有意过滤文件名非法字符（Windows 保留符 + 控制字符），防止配置值逃逸配置文件路径
   if (!id || id.length > 64 || ID_FORBIDDEN.test(id)) return null;
   // size 下限与读路径一致（petNumber(..., min=1)）：写路径若放行 0.5，落盘后会被读取端判非法、
@@ -522,31 +548,18 @@ function passthrough(
 }
 
 /** 归属表：实例 id → 它当前生效的条目。
- *  按 readAllConfig 的处理顺序（main 先、其后各文件按名排序）复刻同一套「先到者胜」语义：
- *   - main 条目取合并后的实例（含内置默认那只——它本就合法归主条目）；
- *   - 文件宠物条目**只认它自己文件里真正声明的 id**，且已被前面条目占用的 id 不再归它。
- *  两条缺一不可：文件没写 pets（或声明的实例全被跳过）时 readAllConfig 会回退成内置默认实例
- *  （id = main），那只是读时占位、不代表该文件拥有这个 id；若照单全收，一个只有顶层人设的
- *  pack 文件就会劫持主宠归属，把主宠分流写进它，保存随即失败。 */
+ *  按 readAllConfig 的处理顺序（main 先、其后各文件按名排序）复刻同一套「先到者胜」语义。
+ *
+ *  这里不需要「文件宠物是否声明过这个 id」的额外判断：读路径的文件宠物条目**只会**包含
+ *  它自己文件里声明的实例（mergePet 只输出它校验过的、来自本文件 pets 数组的实例），
+ *  所以「条目里出现的 id」与「该文件声明的 id」恒等。 */
 function petOwners(paths: ConfigPaths): Map<string, string> {
-  // 每个文件宠物条目「自己声明的 id」集合（文件解析失败 = 空集，不参与归属）
-  const declared = new Map<string, Set<string>>();
-  for (const f of scanPetFiles(paths.petDir)) {
-    const raw = readJsonc(f.path);
-    const list = Array.isArray(raw?.pets) ? (raw.pets as Record<string, unknown>[]) : [];
-    declared.set(f.prefix, new Set(list.map((p) => String(p?.id ?? '')).filter(Boolean)));
-  }
-
   const owners = new Map<string, string>();
   for (const [entry, conf] of Object.entries(readAllConfig(paths))) {
     const list = Array.isArray(conf?.pets) ? (conf.pets as Record<string, unknown>[]) : [];
     for (const p of list) {
       const id = String(p?.id ?? '');
       if (!id || owners.has(id)) continue; // 已被前面的条目占用 → 本条目拿不到它（同 seenIds）
-      if (entry !== 'main') {
-        const own = declared.get(entry);
-        if (!own || !own.has(id)) continue; // 该文件没声明这个 id → 读时回退的占位实例，不参与归属
-      }
       owners.set(id, entry);
     }
   }
@@ -559,19 +572,20 @@ function petOwners(paths: ConfigPaths): Map<string, string> {
  * 归属规则（唯一规则，与 readAllConfig 的条目划分一致）：
  *   - id 当前生效于某个文件宠物条目 → 写回**那个 pet/<前缀>-config.json**（顶层字段透传保留）；
  *   - 其余（main 条目实例、以及设置页新建、尚未落盘的实例）→ 写进 main-config.json。
- * 未收到任何实例的条目**不进计划**（宿主不动该文件）；主条目同理（main = null）——
- * 但全局开关只归主条目，所以「带了全局开关却没有任何主条目实例」会被拒绝（客户端状态不一致）。
+ * 未收到任何实例的条目**不进计划**（宿主不动该文件）；主条目在既没有实例、也没带全局开关时为
+ * null（完全不涉及主条目），带了开关就写（哪怕实例为空——那是「删光宠物」的落盘形态）。
  *
  * 全局开关（notificationsEnabled / whisperImageEnabled / chatImageEnabled）只归主条目：
  * 请求体传了才写，未传则透传磁盘旧值（不凭空造字段，也不把既有设置抹成默认）。
  *
- * 校验：任一实例字段非法、pets 为空、任一全局开关非布尔 → 整份返回 null（宿主回 400）。
+ * 校验：pets 非数组、任一实例字段非法、任一全局开关非布尔 → 整份返回 null（宿主回 400）。
  * 这条「全有或全无」是有意的：绝不写出半份配置。
+ * 注意 `pets: []` 是**合法**提交（= 用户把宠物删光了），不是校验失败。
  */
 export function planConfigSave(paths: ConfigPaths, raw: unknown): ConfigSavePlan | null {
   const o = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   const arr = Array.isArray(o.pets) ? o.pets : null;
-  if (!arr || !arr.length) return null;
+  if (!arr) return null; // 缺 pets / 非数组：不是一份合法提交
   for (const key of GLOBAL_SWITCHES) {
     const v = o[key];
     if (v !== undefined && typeof v !== 'boolean') return null;
@@ -618,7 +632,10 @@ export function planConfigSave(paths: ConfigPaths, raw: unknown): ConfigSavePlan
     const merged: unknown[] = [];
     const diskPets = Array.isArray(disk?.pets) ? (disk.pets as Record<string, unknown>[]) : [];
     for (const d of diskPets) {
-      const id = String(d?.id ?? '');
+      // 磁盘 id 也要 trim：读路径按 trim 后的 id 认这只实例（mergePet），设置页提交的也是 trim 后的
+      // id。这里若拿未 trim 的磁盘 id 去查提交表，手写的 ' d1 ' 就永远查不中，原样吐出旧实例——
+      // 用户在设置页改的 size 等字段会静默丢失（提交值被丢弃、旧值被保留）。
+      const id = String(d?.id ?? '').trim();
       const s = submitted.get(id);
       // 提交值覆盖同 id（只消费一次：文件里若有重复 id 的第二只，它本来就会被加载跳过，
       // 这里保持原样即可）；未提交的（多半是 id 非法/重复、被加载跳过的实例，设置页根本
@@ -632,12 +649,18 @@ export function planConfigSave(paths: ConfigPaths, raw: unknown): ConfigSavePlan
     entries.push({ path: file.path, prefix, config: passthrough(disk, merged) });
   }
 
-  // 主条目：有主条目实例才写（只带全局开关却不带主条目实例 = 客户端状态不一致，拒绝）
+  // 主条目：有主条目实例、或带了全局开关才写（只带文件宠物实例且不带开关 = 完全不涉及主条目，main = null）。
   // 注意主条目是**整体替换**（不是像文件宠物那样保留未提交项）：设置页支持删除主条目实例，
   // 「没提交」正是删除的表达，二者不可兼得——文件宠物则相反（设置页禁止删除，故必须保留）。
+  // 因此「带了开关 + 没有任何主条目实例」是**合法**的（用户删光了宠物，只剩文件宠物或一只不剩）：
+  // 开关归主条目管，必须落盘；同时按提交列表把主条目实例清空（pets: []）。
+  // 这条曾经是 return null —— 那会让用户永远删不掉最后一只宠物（设置页保存总是带开关），
+  // 报错文案还误称「至少保留一个宠物」，而实际提交里可能根本没有主条目实例。
   const anySwitch = GLOBAL_SWITCHES.some((k) => o[k] !== undefined);
   let main: ConfigSavePlan['main'] = null;
-  if (mainPets.length > 0) main = passthrough(readJsonc(paths.userFile), mainPets, o);
-  else if (anySwitch) return null;
+  // `arr.length === 0` 是「清空主条目」的明确意图，必须写盘：只提交 `{ pets: [] }`（不带开关）时
+  // 若落到 main = null，宿主不写文件却照样回 200——客户端以为删干净了，磁盘原封不动。
+  // 注意不能把「只提交了文件宠物实例」也算进来（那种情况下 main 必须保持 null，一个字节都不动）。
+  if (arr.length === 0 || mainPets.length > 0 || anySwitch) main = passthrough(readJsonc(paths.userFile), mainPets, o);
   return { main, entries };
 }

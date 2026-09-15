@@ -31,6 +31,18 @@ export const petBridge: {
   template: undefined,
 };
 
+/** 「添加宠物」的初值模板：主条目没有实例时（用户删光了宠物）petBridge.template 为 undefined，
+ *  用内置默认宠物的同形状初值兜底——否则「添加宠物」会静默无反应。
+ *  数值与 assets/config.jsonc 的内置默认宠物一致（那份是 host 侧默认实例，客户端拿不到）。 */
+const DEFAULT_PET_INSTANCE = {
+  size: 462,
+  balanceEnabled: true,
+  whisperEnabled: false,
+  workStatusEnabled: false,
+  display: 'both' as PetDisplay,
+  position: { corner: 'top-right' as Corner, marginX: 24, marginY: 100 },
+};
+
 /** 字典命名空间 */
 export const NS = 'pet.config';
 
@@ -48,7 +60,6 @@ export const zh = {
   confirmRemove: '确定删除宠物「{id}」吗？',
   confirmTitle: '确认操作',
   cancel: '取消',
-  atLeastOne: '至少保留一个宠物。',
   emptyPets: '暂无宠物，点击「添加宠物」创建。',
   sizeLabel: '大小（宽度 px）',
   sizeHint: '高度自动 = 宽度 × 9/16。',
@@ -133,7 +144,6 @@ export const en = {
   confirmRemove: 'Delete pet "{id}"?',
   confirmTitle: 'Confirm action',
   cancel: 'Cancel',
-  atLeastOne: 'Keep at least one pet.',
   emptyPets: 'No pets yet — click "Add pet" to create one.',
   sizeLabel: 'Size (width px)',
   sizeHint: 'Height is automatic = width × 9/16.',
@@ -460,8 +470,7 @@ export function makePetConfigSection(rt: {
     };
 
     const addPet = () => {
-      const tpl = petBridge.template;
-      if (!tpl) return;
+      const tpl = petBridge.template ?? DEFAULT_PET_INSTANCE;
       const id = nextId(pets);
       setPets((list) => [
         ...list,
@@ -491,17 +500,13 @@ export function makePetConfigSection(rt: {
         setMsg({ kind: 'err', text: t('removeFilePet') });
         return;
       }
-      if (pets.filter((p) => p.assetRoot === 'main').length <= 1) {
-        setMsg({ kind: 'err', text: t('atLeastOne') });
-        return;
-      }
       setConfirm('remove');
     };
 
     const doRemove = () => {
       const list = pets.filter((p) => p.id !== selId);
       setPets(list);
-      setSelId(list[0].id);
+      setSelId(list[0]?.id ?? '');
     };
 
     const field = (key: 'size' | 'marginX' | 'marginY', value: number, setter: (v: number) => void, width: string) =>

@@ -278,10 +278,9 @@ describe('planConfigSave —— 按 id 归属分流到各配置文件', () => {
 });
 
 describe('planConfigSave —— 校验失败一律整体拒绝（宿主回 400）', () => {
-  test('空列表 / 非数组 pets / 缺 notificationsEnabled 类型', () => {
+  test('非数组 pets / 缺 pets / 缺 notificationsEnabled 类型', () => {
     const { paths, done } = fixture();
     try {
-      assert.equal(planConfigSave(paths, { pets: [] }), null);
       assert.equal(planConfigSave(paths, { pets: 'x' }), null);
       assert.equal(planConfigSave(paths, {}), null);
       assert.equal(planConfigSave(paths, { pets: [pet('main')], notificationsEnabled: 'yes' }), null);
@@ -331,11 +330,11 @@ describe('planConfigSave —— 校验失败一律整体拒绝（宿主回 400�
     }
   });
 
-  test('pack 文件没写 pets（回退成默认实例）→ 不劫持主宠归属，保存照常成功', () => {
+  test('pack 文件没写 pets → 该条目没有实例，不劫持主宠归属，保存照常成功', () => {
     const { paths, done } = fixture();
     try {
-      // 手写一个只有顶层人设、没有 pets 的 pack 文件：readAllConfig 会让它回退成默认实例（id=main），
-      // 归属表若照单全收就会把真正的主宠 main 记到这个条目名下 —— 保存随即 400。
+      // 手写一个只有顶层人设、没有 pets 的 pack 文件：该条目就是「零实例」，
+      // 主宠 main 只能归主条目；归属表若把主宠记到这个条目名下，保存随即 400。
       writeFileSync(join(paths.petDir, 'custom-config.json'), JSON.stringify({ whisperPrompt: '自定义人设' }));
       const plan = planConfigSave(paths, { pets: [pet('main', { size: 470 })], notificationsEnabled: true });
       assert.ok(plan, '保存不应失败');
@@ -344,6 +343,49 @@ describe('planConfigSave —— 校验失败一律整体拒绝（宿主回 400�
         ['main'],
       );
       assert.deepEqual(plan.entries, []); // 主宠没有被分流进 custom-config.json
+    } finally {
+      done();
+    }
+  });
+
+  test('文件宠物声明带首尾空格的 id → 归属表与 mergePet 同一归一化，不误写进 main', () => {
+    const { paths, packFile, done } = fixture();
+    try {
+      // mergePet 会把 id trim 后使用（读到的实例 id = dachshund1）；归属表必须同样 trim，
+      // 否则它认不出这个 id 属于本文件，会把实例分流进 main-config.json，下次加载即被去重吃掉。
+      writeFileSync(packFile, JSON.stringify({ ...PACK, pets: [{ ...PACK.pets[0], id: ' dachshund1 ' }] }));
+      const plan = planConfigSave(paths, { pets: [pet('dachshund1', { size: 430 })] });
+      assert.ok(plan);
+      assert.equal(plan.main, null); // 未被误判成主条目实例
+      assert.equal(plan.entries.length, 1);
+      assert.equal(plan.entries[0].path, packFile);
+      // 分流对了还不够——必须断言**合并结果**：磁盘 id 带空格时，若回写合并用未归一化的
+      // 磁盘 id 去查提交表就会查不中，于是原样吐出旧实例，用户改的 size 静默丢失。
+      // 只断言 entries.length 会让这条缺陷从测试里溜过去（假阳性）。
+      assert.deepEqual(
+        (plan.entries[0].config.pets as Record<string, unknown>[]).map((p) => ({ id: p.id, size: p.size })),
+        [{ id: 'dachshund1', size: 430 }],
+      );
+      assert.equal((plan.entries[0].config as Record<string, unknown>).whisperPrompt, '你是腊肠犬');
+    } finally {
+      done();
+    }
+  });
+
+  test('提交带首尾空格的 id → 写路径与读路径同一归一化（cleanPet 必须 trim）', () => {
+    const { paths, packFile, done } = fixture();
+    try {
+      // 读路径 mergePet 会把 id trim 后使用；写路径若原样收下 ' dachshund1 '，
+      // 落盘后读取端读到的却是 'dachshund1'——同一个宠物在读写两侧是两个 id。
+      const plan = planConfigSave(paths, { pets: [{ ...pet('dachshund1', { size: 430 }), id: ' dachshund1 ' }] });
+      assert.ok(plan);
+      assert.equal(plan.entries.length, 1, 'trim 后应归属文件宠物条目');
+      assert.equal(plan.entries[0].path, packFile);
+      assert.equal(plan.main, null);
+      assert.deepEqual(
+        (plan.entries[0].config.pets as Record<string, unknown>[]).map((p) => ({ id: p.id, size: p.size })),
+        [{ id: 'dachshund1', size: 430 }],
+      );
     } finally {
       done();
     }
@@ -374,6 +416,84 @@ describe('planConfigSave —— 校验失败一律整体拒绝（宿主回 400�
     const { paths, done } = fixture();
     try {
       assert.equal(planConfigSave(paths, { pets: [pet('main'), pet('dachshund1', { size: -1 })] }), null);
+    } finally {
+      done();
+    }
+  });
+});
+
+describe('planConfigSave —— 删光主宠物（显式空 pets = 真正的零宠物）', () => {
+  test('显式 pets: [] → 仍写 main（pets 为空）+ 开关，主宠物真正消失', () => {
+    const { paths, done } = fixture();
+    try {
+      const plan = planConfigSave(paths, { pets: [], notificationsEnabled: true });
+      assert.ok(plan, '空 pets 必须被接受：这是设置页删光宠物后的落盘形态');
+      assert.deepEqual(plan.main?.pets, []);
+      assert.equal(plan.main?.notificationsEnabled, true);
+      assert.equal(plan.main?.whisperPrompt, '女仆人设'); // 顶层字段仍透传保留
+      assert.deepEqual(plan.entries, []);
+    } finally {
+      done();
+    }
+  });
+
+  test('显式 pets: [] 但**不带任何全局开关** → 仍必须写 main（否则删除请求被静默吞掉）', () => {
+    const { paths, done } = fixture();
+    try {
+      // 设置页保存总是带开关，所以真实 UI 走不到这条；但 PUT /config 是公开契约，
+      // 只提交 { pets: [] } 时若 main = null，宿主不会写盘却照样回 200——
+      // 客户端以为删干净了，实际磁盘原封不动，下次刷新宠物全部复活。
+      // 空 pets 本身就是「清空主条目」的明确意图，与是否带开关无关。
+      const plan = planConfigSave(paths, { pets: [] });
+      assert.ok(plan, '空 pets 必须被接受');
+      assert.ok(plan.main, '不带开关也必须产出主条目计划，否则宿主不写盘 = 静默无操作');
+      assert.deepEqual(plan.main.pets, []);
+      assert.equal(plan.main.whisperPrompt, '女仆人设'); // 顶层字段仍透传
+      assert.equal(plan.main.notificationsEnabled, true); // 未提交的开关透传磁盘旧值
+    } finally {
+      done();
+    }
+  });
+
+  test('删光主宠物但保留文件宠物 → main 写空 pets，文件宠物照常写回（原「至少保留一个宠物」的触发场景）', () => {
+    const { paths, packFile, done } = fixture();
+    try {
+      // 设置页提交的是完整列表：删掉唯一主宠后，列表里只剩文件宠物。
+      // 旧实现因「带了全局开关却没有任何主条目实例」整份拒绝 → 用户被一句
+      // 「至少保留一个宠物」挡住，而删除权其实不该被这样剥夺。
+      const plan = planConfigSave(paths, {
+        pets: [pet('dachshund1', { size: 430 })],
+        notificationsEnabled: true,
+      });
+      assert.ok(plan, '只剩文件宠物时也必须能保存');
+      assert.deepEqual(plan.main?.pets, []);
+      assert.equal(plan.main?.notificationsEnabled, true);
+      assert.equal(plan.entries.length, 1);
+      assert.equal(plan.entries[0].path, packFile);
+      assert.deepEqual(
+        (plan.entries[0].config.pets as Record<string, unknown>[]).map((p) => p.size),
+        [430],
+      );
+    } finally {
+      done();
+    }
+  });
+
+  test('落盘后读回：main 的 pets 为空数组（不复活内置默认宠物），文件宠物仍在', async () => {
+    const { paths, done } = fixture();
+    try {
+      const plan = planConfigSave(paths, { pets: [], notificationsEnabled: true });
+      assert.ok(plan);
+      writeFileSync(paths.userFile, JSON.stringify(plan.main, null, 2));
+      // 重新读：与生产同一路径。写侧放行还不够——读侧若把「显式空数组」当「字段缺失」，
+      // 内置默认宠物就会在下次加载时复活，删除形同虚设。
+      const { readAllConfig, flattenPetList } = await import('./config.ts');
+      const merged = readAllConfig(paths);
+      assert.deepEqual(merged.main.pets, []);
+      assert.deepEqual(
+        flattenPetList(merged).map((p) => p.id),
+        ['dachshund1'],
+      );
     } finally {
       done();
     }
