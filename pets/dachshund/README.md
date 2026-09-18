@@ -1,7 +1,7 @@
 # 腊肠犬 pet pack —— 源资产与生成链
 
 本目录是一只**额外宠物（pet pack）**的全部源资产与工具：腊肠犬「JJ」，20 个动作。
-规格见 [`docs/specs/pet-dachshund-green-screen.md`](../../docs/specs/pet-dachshund-green-screen.md)。
+规格见 [`docs/plans/pet-dachshund-green-screen.md`](../../docs/plans/pet-dachshund-green-screen.md)。
 
 目录布局与运行时一一对应：`pets/<种类名>/` ↔ `$DSH_HOME/dsh-pet/pet/<种类名>-{config.json,animation/}`。
 本目录**不含**运行时配置与播放素材——那两样在 `$DSH_HOME` 下（见文末「装配」）。
