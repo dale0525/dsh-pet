@@ -1,0 +1,22 @@
+subject_definitions:
+<Picture 1> is the opening-frame target (best effort) for <Subject 1>: the dog standing on all four legs, facing the camera dead-on on a flat pure green chroma-key background, mouth slightly open with the pink tongue out, tail hanging down behind.
+<Picture 2> is the ending-frame target (best effort) for <Subject 1>: exactly the same standing pose as <Picture 1> — the ACTION must end where it began so the clip loops without a jump.
+<Subject 1> is the long-haired golden-red miniature dachshund in <Picture 1> and <Picture 2>, with feathered golden-red fur, long drooping feathered ears, dark round eyes, a black nose, and a lighter cream chest and front paws. Its short legs and long low body are part of the identity.
+
+summary:
+[reference generation] The target video is a single continuous static shot of <Subject 1> gnawing on a small bone in place on a flat chroma-key green background. Over an effective duration of 10 seconds the scene begins with clean green screen and no props, after which a small pale bone materializes on the floor between the dog's front paws; the dog lowers its head, pins the bone with one front paw and chews it busily with quick small jaw movements, occasionally lifting its head to re-grip it, before the bone dissolves into sparkling dust and the dog returns to the prop-free standing posture in <Picture 2>. The dog stays anchored to the same spot with zero translational shift and keeps generous green margins on all sides.
+
+retention_analysis:
+<Subject 1> (appears throughout): fully_preserved - the golden-red feathered fur, long drooping feathered ears, dark round eyes, black nose, cream chest and front paws, short legs and long low body are all retained.
+<Picture 1>: partially_preserved - opening-frame target (best effort); the standing pose, the front-on head position, the open mouth with the pink tongue out, and the hanging tail guide the first frame.
+<Picture 2>: partially_preserved - ending-frame target (best effort); it is the same standing pose as <Picture 1>, so the last second returns to the opening configuration for a seamless loop.
+The flat pure green background is fully retained on every frame, with no shadows, no text and no added objects beyond the single prop described, which dissolves completely before the end.
+
+detailed_description:
+A single continuous shot on a flat chroma-key green background, no cuts and no camera movement. A static medium shot of <Subject 1> standing on all four legs, facing the camera dead-on, centered in the frame. [Shot 1] The dog begins in the standard standing pose of <Picture 1>, on a completely clean green floor with no objects present. From 00:01.000 a small pale bone begins to materialize flat on the floor directly between the dog's front paws: first a faint translucent outline, then a solid short bone with two rounded knuckles at each end, small enough to stay well inside the frame and to leave the dog's silhouette unchanged. Through 00:02.500 the bone finishes condensing and the dog lowers its head toward it, ears swinging forward. From 00:02.500 through 00:07.000 the dog gnaws: it pins the bone down with the front-left paw while chewing on one end with quick small jaw movements, its head giving tiny nods with each bite, and after a few seconds it lifts its head briefly, re-grips the other end of the bone and resumes chewing. All four paws stay in exactly the same spots — the front-left paw presses down on the bone and the other three never move — and the dog's chest and hindquarters stay anchored and centered. The bone never slides out of the dog's reach, never rolls away and never grows; the dog never walks, never steps forward and never turns off-axis. From 00:07.000 the chewing slows, the dog lifts its head and releases the bone. Through 00:08.800 the bone fades from solid to translucent and dissolves into a few sparkling dust motes that rise and vanish, leaving the floor completely clean. By 00:10.000 the dog stands perfectly still in exactly the standing pose of <Picture 2>, matching <Picture 1> frame for frame, mouth slightly open with the pink tongue out, and no prop remaining anywhere in the frame. The dog never walks, never turns off-axis and never shifts laterally; its silhouette stays centered with generous green margin on every side.
+
+overall_soundscape:
+Quiet indoor room tone, very low in the mix, with the soft quick crunching of a dog gnawing a hard bone and contented breathing through its nose. No music, no speech and no other animal sounds.
+
+non_diegetic_music:
+N/A

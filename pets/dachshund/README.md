@@ -1,6 +1,6 @@
 # 腊肠犬 pet pack —— 源资产与生成链
 
-本目录是一只**额外宠物（pet pack）**的全部源资产与工具：腊肠犬「JJ」，20 个动作。
+本目录是一只**额外宠物（pet pack）**的全部源资产与工具：腊肠犬「JJ」，25 个动作。
 规格见 [`docs/plans/pet-dachshund-green-screen.md`](../../docs/plans/pet-dachshund-green-screen.md)。
 
 目录布局与运行时一一对应：`pets/<种类名>/` ↔ `$DSH_HOME/dsh-pet/pet/<种类名>-{config.json,animation/}`。
@@ -10,22 +10,22 @@
 
 ```
 pets/dachshund/
-├── prompts/    20 个 .txt   H3 提示词（含 §5.4 通用前缀 + 按秒分解）
+├── prompts/    25 个 .txt   H3 提示词（含 §5.4 通用前缀 + 按秒分解）
 ├── frames/      3 张 PNG    身份基准首尾帧（1672×941）
 ├── raw/         2 张 PNG    图生图原图 —— frames/ 的上游
-├── h3/         20 个 .mp4   H3 成片（864×480 h264，付费产物）
-├── reports/    20 个 .json  每次生成的成本/溯源记录
+├── h3/         25 个 .mp4   H3 成片（864×480 h264，付费产物）
+├── reports/    25 个 .json  每次生成的成本/溯源记录
 ├── evaluate_dachshund.py    门禁脚本（frames / video 两种模式）
 └── test_*.py     5 个文件   管线与门禁的单测（共 34 项）
 ```
 
 | 目录 | 内容 | 为什么留着 |
 | --- | --- | --- |
-| `prompts/` | 20 个动作的 H3 提示词 | **新增动画的起点**：改一份提示词即可生成新动作 |
-| `frames/` | `base-standing.png`（身份基准）+ `turn-side-left/right.png` | **身份锚点**：除 `turn` 外的 19 个动作共用同一张首尾帧，保证形象与缩放一致 |
+| `prompts/` | 25 个动作的 H3 提示词 | **新增动画的起点**：改一份提示词即可生成新动作 |
+| `frames/` | `base-standing.png`（身份基准）+ `turn-side-left/right.png` | **身份锚点**：除 `turn` 外的 24 个动作共用同一张首尾帧，保证形象与缩放一致 |
 | `raw/` | `base-standing-raw-1.png`、`base-standing-side-raw-1.png` | `frames/` 的图生图原图；**换形象时从这里重跑** |
-| `h3/` | 20 个 H3 成片（扁平、`<动作名>.mp4`） | **不必重复付费**：改抠像/归一化算法后可直接重跑下游 |
-| `reports/` | 20 份 `report.json` | 成本与溯源；排查「哪次生成用了什么参数」 |
+| `h3/` | 25 个 H3 成片（扁平、`<动作名>.mp4`） | **不必重复付费**：改抠像/归一化算法后可直接重跑下游 |
+| `reports/` | 25 份 `report.json` | 成本与溯源；排查「哪次生成用了什么参数」 |
 
 > **`h3/` 是省钱的资产**：本包 H3 含返工实测总花费 **≈ $1.63**（规格 §17.4）；
 > `reports/` 里保留的是**每动作最终一次**的记录，合计 $1.20。
@@ -68,7 +68,7 @@ pixi run thumbs     # step03/ → step04/
 1. **写提示词**：复制 `prompts/01-idle-breathing.txt` 改动作描述，编号递增（`21-....txt`）。
    首尾帧必须回到同一站姿——除 `turn` 外，首尾帧是**同一张** `frames/base-standing.png`。
 2. **生成 H3**：用 `agentnovel_modal_h3.py run --duration-seconds 10`，两张参考图都传该首帧。
-   **这是唯一花钱的一步**（本包 20 段实测单段 $0.055–0.107，见 `reports/*.json`）。
+   **这是唯一花钱的一步**（本包 25 段实测单段 $0.055–0.128，见 `reports/*.json`）。
 3. **落盘**：成片存为 `h3/<动作名>.mp4`，成本记录存为 `reports/<动作名>.json`。
 4. **跑下游**：从 `h3/` 经 ④→⑥ 产出 `step04/<动作名>.webm`（③ 已完成，`h3/` 就是它的产物）。
 5. **接进配置**：把动作名加进 `$DSH_HOME/dsh-pet/pet/dachshund-config.json` 的某个池，
@@ -126,7 +126,7 @@ pixi run python pets/dachshund/evaluate_dachshund.py video pets/dachshund/h3/待
 ```
 $DSH_HOME/dsh-pet/pet/
 ├── dachshund-config.json          ← 动画池 / 权重 / 人设文案（含 whisperPrompt、workStatusTexts）
-└── dachshund-animation/*.webm     ← 20 个播放素材，扁平存放
+└── dachshund-animation/*.webm     ← 25 个播放素材，扁平存放
 ```
 
 放错位置宿主不会扫描，动画全部 404。素材目录名 = 配置文件名前缀 = 种类名。
