@@ -50,8 +50,8 @@ pets/dachshund/
 ⑥ 装配        $DSH_HOME/dsh-pet/pet/dachshund-animation/*.webm
 ```
 
-**④ 必须在 ⑤ 之前**：`chroma_step02.py` 与 `normalize_step03.py` 都**硬编码 1280×720**。
-把 H3 原始的 864×480 直接喂给 ⑤ 不会报错，但会把 2.22 帧当成一帧读，**静默错位**。
+**④ 先于 ⑤**（原因见 [`AGENTS.md`](../../AGENTS.md)「硬门禁」）：`chroma_step02.py` 与
+`normalize_step03.py` 都硬编码 1280×720，把 H3 原始的 864×480 直接喂给 ⑤ 不会报错，但会静默错位。
 
 **`step01/`~`step04/` 是中间产物**，已被 `.gitignore` 忽略，随时可从 `h3/` 再生：
 
@@ -66,7 +66,7 @@ pixi run thumbs     # step03/ → step04/
 ## 新增一个动画
 
 1. **写提示词**：复制 `prompts/01-idle-breathing.txt` 改动作描述，编号递增（`21-....txt`）。
-   首尾帧必须回到同一站姿——除 `turn` 外，首尾帧是**同一张** `frames/base-standing.png`。
+   首尾帧回到同一站姿——除 `turn` 外，首尾帧是**同一张** `frames/base-standing.png`（不变量见 `AGENTS.md`）。
 2. **生成 H3**：用 `agentnovel_modal_h3.py run --duration-seconds 10`，两张参考图都传该首帧。
    **这是唯一花钱的一步**（本包 25 段实测单段 $0.055–0.128，见 `reports/*.json`）。
 3. **落盘**：成片存为 `h3/<动作名>.mp4`，成本记录存为 `reports/<动作名>.json`。
@@ -74,8 +74,8 @@ pixi run thumbs     # step03/ → step04/
 5. **接进配置**：把动作名加进 `$DSH_HOME/dsh-pet/pet/dachshund-config.json` 的某个池，
    并把 `step04/*.webm` 拷进 `dachshund-animation/`。宿主每次读配置，**刷新页面即生效**，无需重启。
 
-> **命名**：`h3/`、`reports/`、`step04/`、`dachshund-animation/` 四处**必须同名**（`<动作名>`），
-> 配置里的动画名就是文件名。
+> **命名**：`h3/`、`reports/`、`step04/`、`dachshund-animation/` 四处同名（`<动作名>`），
+> 配置里的动画名就是文件名。这是不变量，见 [`AGENTS.md`](../../AGENTS.md)「硬门禁」。
 
 ## 从 `h3/` 重跑下游（不重新付费）
 
@@ -89,35 +89,17 @@ pixi run chroma && pixi run normalize && pixi run thumbs
 
 ## 门禁与测试
 
-```sh
-cd /Volumes/LogicExt/Git/dsh-pet
-
-# 34 项单测
-pixi run python pets/dachshund/test_frame_plate.py
-pixi run python pets/dachshund/test_scripts_tools.py
-pixi run python pets/dachshund/test_bridge_step00.py
-pixi run python pets/dachshund/test_resume_truncation.py
-pixi run python pets/dachshund/test_evaluate_dachshund.py
-
-# 门禁：首尾帧（图像级）与成片（视频级）
-pixi run python pets/dachshund/evaluate_dachshund.py frames pets/dachshund/frames/base-standing.png
-pixi run python pets/dachshund/evaluate_dachshund.py video pets/dachshund/h3/待机呼吸.mp4 --seconds 10
-```
-
-`evaluate_dachshund.py` 有两种模式（按扩展名自动判定，也可用 `--raw` / `--keyed` 显式指定）：
-- **raw**（H3 成片 `.mp4`）：容器门禁 864×480 / 24fps / 10±0.05s / h264
-- **keyed**（交付物 `.webm`）：容器门禁 640×360 / 24fps / VP9+alpha，判定改用 2026-09-02 裁定口径
-  （交付物绿溢 ≤2%、站立采样点前景 ≥0.15），同时**保留并打印**原始口径数值作参考
+34 项单测与两级门禁（首尾帧图像级 / 成片视频级）的命令与判定口径见
+项目技能 [`pet-animation`](../../.agents/skills/pet-animation/SKILL.md)「验收」。
 
 ## 依赖与边界
 
 - **③ 的生成器不在本仓库**：`agentnovel_modal_h3.py` 是外部工程的脚本（本仓库只引用它）。
-  即「重新生成 H3」这一步**无法仅凭本仓库复现**；能复现的是 **④→⑥**（从入库的 `h3/` 起跑）。
+  即「重新生成 H3」这一步无法仅凭本仓库复现；能复现的是 **④→⑥**（从入库的 `h3/` 起跑）。
   这也是把 `h3/` 成片入库的核心理由——它把不可复现的付费步骤固化下来。
-- **评估器依赖 `test/pet1/`**（未入 git，按规格 §11 裁定 5）。缺失时**显式报错并给出补救指引**，
-  不静默降级——门禁宁可报错也不假装通过（实测：缺 `test/pet1/` 时 `evaluate_dachshund.py` 退出码 1）。
+- **评估器依赖 `test/pet1/`**（本 pack 之前的 5 秒验证产物，不入版本库）。缺失时显式报错并给出补救指引，
+  不静默降级（实测：缺 `test/pet1/` 时 `evaluate_dachshund.py` 退出码 1）。
 - **运行环境**：`pixi.toml`（仓库根）定义了 numpy/scipy/pillow/ffmpeg；`.pixi/` 本机重建，不入库。
-- **`test/pet1/` 不随本目录走**：它是本 pack 之前的 5 秒验证产物，按裁定不入版本库。
 
 ## 装配（产物去向）
 
