@@ -58,6 +58,15 @@ class PetSprite {
     this.gen = 0;
     this.anim = this.animations.idle[0] ?? '';
     this.once = true;
+    // 当前动画来源：true = 事件触发（余额/碎碎念/工作状态），false = 常规动画链或互动。
+    // handleEnded 按来源而非名字判断事件动画：同一动画名可同时出现在 events 池与常规池
+    // （待机呼吸既是 idle 又是 whisper/workStatus 候选），按名字判断会把常规待机误判成事件动画，
+    // 随机链再也回不到——历史 bug「只有 2 个动画在循环」。与浏览器 pet.ts animFromEventRef 同构。
+    this.animFromEvent = false;
+    // 档位连播计数 + 插播标记：计数达阈值时改播一个随机常规动画（workInterlude=true），
+    // 该动画播完由 handleEnded 回到档位循环。与浏览器 pet.ts workStreakRef/workInterludeRef 同构。
+    this.workStreak = 0;
+    this.workInterlude = false;
     this.facing = 'left';
     // 交互/移动
     this.dragState = { active: false, dragging: false, sx: 0, sy: 0, petX: 0, petY: 0 };
@@ -384,6 +393,7 @@ class PetSprite {
   // 动画链（与浏览器 pickNext 语义一致，纯逻辑在 shared）
   playIdle() {
     this.stopMove();
+    this.animFromEvent = false;
     const { animations, animationWeights } = { animations: this.animations, animationWeights: this.weights };
     const roll = Math.random();
     const k = S.rollKind(roll, animationWeights);
@@ -415,13 +425,41 @@ class PetSprite {
     if (this.dragState.active) return;
     const { animations } = { animations: this.animations };
     // 事件动画播完：回 idle（与 drag/clicks 同分支，不进随机链）；气泡由定时器自动消失，与动画解耦
-    const isEvent = S.isEventAnim(animations.events, this.anim);
+    const isEvent = this.animFromEvent;
+    // 插播的随机动画播完：立即回到档位循环（不进随机链，否则会一直随机下去、状态提示断档）
+    if (this.workInterlude) {
+      this.workInterlude = false;
+      if (this.resumeWorkStatusAnim()) return;
+    }
     if (isEvent) {
       // 工作状态多候选档位：播完一段自动轮换到下一候选（排除当前段，避免连抽），继续循环——
       // 长时间状态不单段重复（与浏览器 ended 护栏共用同一决策 nextWorkStatusAnim）。
       // 仅非终态档位轮换；终态（success/error）播完一次即结束，绝不轮换续播。单候选档位由
       // loop 无限循环（不触发 ended，不会走到这里）。
       const nonTerminal = this.workState && this.workState !== 'success' && this.workState !== 'error';
+      // 连播计数：满 WORK_INTERLUDE_EVERY 段就插播一个随机常规动画，避免长任务里只在
+      // 这一档的候选之间来回播。插播动画由上面的 workInterlude 收尾回档位循环。
+      if (nonTerminal) {
+        this.workStreak += 1;
+        if (this.workStreak >= WORK_INTERLUDE_EVERY) {
+          this.workStreak = 0;
+          const act = S.pickCategoryAction(animations.categories, animations.idle, this.facing, this.anim);
+          console.log(
+            '[dsh-pet] ' +
+              new Date().toTimeString().slice(0, 8) +
+              ' pet=' +
+              this.pet.id +
+              ' workStatus 插播随机动画: ' +
+              this.anim +
+              ' -> ' +
+              act.name,
+          );
+          this.workInterlude = true;
+          this.animFromEvent = false;
+          this.playOnce(act.name);
+          return;
+        }
+      }
       const nextWork = nonTerminal ? S.nextWorkStatusAnim(animations.events?.workStatus ?? [], this.anim) : null;
       if (nextWork !== null) {
         console.log(
@@ -434,12 +472,14 @@ class PetSprite {
             ' -> ' +
             nextWork,
         );
+        this.animFromEvent = true;
         this.playOnce(nextWork); // 继续播一遍（once=true）→ ended 再轮换
         return;
       }
       // 非 workStatus 事件动画（余额/碎碎念）播完：workStatus 仍非终态 → 立即恢复档位循环动画，
       // 不进随机链（长事件期间状态不变，随机链会一直播到状态切换才被拉回）
       if (this.resumeWorkStatusAnim()) return;
+      this.animFromEvent = false;
       if (animations.idle.length) this.playOnce(S.pick(animations.idle, this.anim));
       return;
     }
@@ -450,6 +490,7 @@ class PetSprite {
     if (animations.drag.includes(this.anim) || animations.clicks.includes(this.anim)) {
       // 互动动画播完：workStatus 非终态时恢复状态循环，否则回 idle（与浏览器同一语义）
       if (this.resumeWorkStatusAnim()) return;
+      this.animFromEvent = false;
       if (animations.idle.length) this.playOnce(S.pick(animations.idle, this.anim));
       return;
     }
@@ -471,6 +512,7 @@ class PetSprite {
       '[dsh-pet] ' + new Date().toTimeString().slice(0, 8) + ' pet=' + this.pet.id + ' 恢复工作状态动画: ' + name,
     );
     const rotating = Array.isArray(slot) && slot.length > 1;
+    this.animFromEvent = true;
     if (rotating)
       this.playOnce(name); // 多候选：播完由 handleEnded 轮换
     else this.switchTo(name, false); // 单候选：无限循环
@@ -511,6 +553,7 @@ class PetSprite {
     this.pendingMove = { ...plan, dir, leadSec: mp.leadSec, tailSec: mp.tailSec };
     this.anim = chosen.name;
     this.once = true;
+    this.animFromEvent = false;
     this.switchTo(chosen.name, true);
     return chosen.name;
   }
@@ -813,6 +856,7 @@ class PetSprite {
       // 真正开始拖拽才把舞台拍平（人物随光标拿起；与浏览器 dragging 语义一致）
       this.stage.style.transform = 'none';
       if (this.animations.drag.length) {
+        this.animFromEvent = false;
         this.playOnce(S.pick(this.animations.drag));
       }
     }
@@ -854,6 +898,7 @@ class PetSprite {
       // 修复：旧实现 switchTo(idle,false)（loop=true，ended 永不触发）→ 随机链永远回不来，
       // 永远卡在同一段待机动画；改为 playOnce（once=true）播一遍 → ended → handleEnded → playIdle 随机链
       if (!this.resumeWorkStatusAnim()) {
+        this.animFromEvent = false;
         if (this.animations.idle.length) this.playOnce(S.pick(this.animations.idle, this.anim));
       }
       // 释放位置 = 弹簧跟随后的实际包围盒左上角（this.pos 实时；不是指针目标——
@@ -934,6 +979,7 @@ class PetSprite {
     this.stopMove();
     if (!this.animations.clicks.length) return;
     this.pendingSquash = true; // 等新点击动画切到前台后 Q 弹（压新首帧，与浏览器一致）
+    this.animFromEvent = false;
     this.playOnce(S.pick(this.animations.clicks));
   }
 
@@ -1031,6 +1077,7 @@ class PetSprite {
     }
     // 点播移动动画：走真实移动（与随机游走同一套：边界检查 / 随机距离 / leadSec·tailSec / dir），
     // 仅"选哪个动画"由菜单决定；挪不动（false）退化纯播放
+    this.animFromEvent = false;
     if (this.animations.moves.actions.some((a) => a.name === leaf.anim)) {
       if (this.tryMove(leaf.anim) === false) this.playOnce(leaf.anim);
       return;

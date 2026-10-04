@@ -207,6 +207,14 @@ export function apply(ctx: any): void {
     task: null as string | null,
     ts: 0,
   } satisfies WorkStatusSnapshot;
+  // 非紧急档位的最短驻留：密集工具调用会让 working↔result 亚秒级抖动（实测最短 0.33s），
+  // 动画刚起播就被下一档换掉。终态 / 等待确认 / 回空闲必须立刻可见，不受此限。
+  const WORK_STATUS_MIN_DWELL_MS = 3000;
+  // 当前档位的展示起点：只随 state 变化推进。绝不复用 workStatus.ts——它也会被 todo 文案
+  // 更新推进，那样密集 todo 会让驻留时钟一直重置、永远切不了档。
+  let workStateSince = 0;
+  // 驻留未满时的延后提交定时器（到点重算；期间任何新事件也会重算并复用/清掉它）
+  let workDwellTimer: ReturnType<typeof setTimeout> | null = null;
   // 系统通知帧队列（/notify 端点增量拉取）：host 监听 DSH 宿主事件生成通知帧
   // （帧契约与 shared/notify.ts 一致），浏览器 1s 轮询 /notify?since=<seq> 拉增量弹 toast。
   // 背景：DSH 0.1.5 删除浏览器侧 api.events.mux/host 事件流，改为 host 转发通道——
@@ -264,8 +272,26 @@ export function apply(ctx: any): void {
     }
     const next = best?.state ?? null;
     if (next === workStatus.state) return; // 无变化：不更新 ts（轮询侧不触发）
+    // 非紧急档位未驻留满 → 延后到满点再提交（详见 WORK_STATUS_MIN_DWELL_MS 注释）。
+    // 延后期间 workStatusBySession 已记录新档，定时器到点重算即可收敛。
+    const urgent = next === null || next === 'waiting' || next === 'success' || next === 'error';
+    const shownFor = Date.now() - workStateSince;
+    if (!urgent && workStatus.state !== null && shownFor < WORK_STATUS_MIN_DWELL_MS) {
+      if (workDwellTimer === null) {
+        workDwellTimer = setTimeout(() => {
+          workDwellTimer = null;
+          refreshWorkStatus();
+        }, WORK_STATUS_MIN_DWELL_MS - shownFor);
+      }
+      return;
+    }
+    if (workDwellTimer !== null) {
+      clearTimeout(workDwellTimer);
+      workDwellTimer = null;
+    }
     workStatus.state = next;
     workStatus.ts = Date.now();
+    workStateSince = workStatus.ts;
   };
   // 命令「当前桌宠」（/pet 选择、/chat 使用）：全局单值不分会话；进程内内存，重启回默认第一只
   let activePetId = '';
@@ -1001,6 +1027,10 @@ export function apply(ctx: any): void {
       dispose();
       for (const t of terminalTimers.values()) clearTimeout(t);
       terminalTimers.clear();
+      if (workDwellTimer !== null) {
+        clearTimeout(workDwellTimer);
+        workDwellTimer = null;
+      }
     };
   }, 'dsh-pet: work-status session events');
 

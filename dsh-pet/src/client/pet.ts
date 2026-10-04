@@ -72,6 +72,10 @@ const THUMB_EXT = ANIMATION_EXT;
 
 /** 余额气泡展示时长（ms）：定时自动消失，与动画生命周期解耦 */
 const BUBBLE_DURATION_MS = 10 * 1000;
+// 工作状态非终态期间：每播满这么多段档位动画，插播一个随机常规动画。
+// 没有它的话，长任务里只会在当前档位的候选之间来回播，其余动画永远轮不到
+// （用户报告的「只有 2 个动画在循环」）。
+const WORK_INTERLUDE_EVERY = 3;
 
 /** 内联 CSS —— 注入一次（官方插件标准做法） */
 const css = [
@@ -214,6 +218,15 @@ export function makePetUI(rt: {
     // workStatus 最新值同步：handleEnded 的 onended 闭包注册时可能早于状态更新，护栏用 ref 读当前值
     const workStatusRef = useRef(workStatus);
     workStatusRef.current = workStatus;
+    // 当前动画的来源：true = 事件触发（余额/碎碎念/工作状态），false = 常规动画链或互动。
+    // handleEnded 必须按来源而非名字判断事件动画：同一个动画名可以同时出现在 events 池与常规池
+    // （待机呼吸既是 idle 又是 whisper/workStatus 候选），按名字判断会把常规待机误判成事件动画，
+    // 随机链再也回不到——历史 bug「只有 2 个动画在循环」。
+    const animFromEventRef = useRef(false);
+    // 档位连播计数 + 插播标记：计数达阈值时改播一个随机常规动画（workInterludeRef=true），
+    // 该动画播完由 handleEnded 回到档位循环——档位提示照旧，但不再霸屏。
+    const workStreakRef = useRef(0);
+    const workInterludeRef = useRef(false);
 
     const switchTo = (next: string, nextOnce: boolean) => {
       if (!next) return;
@@ -361,6 +374,7 @@ export function makePetUI(rt: {
       // 气泡 10s 定时消失（与动画解耦：即使动画被点击/拖拽打断，气泡也按时收起；重复触发先清旧定时器）
       if (bubbleTimerRef.current !== null) window.clearTimeout(bubbleTimerRef.current);
       bubbleTimerRef.current = window.setTimeout(() => setBubbleOn(false), BUBBLE_DURATION_MS);
+      animFromEventRef.current = true;
       setOnce(true);
       setAnim(name);
       // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -409,21 +423,24 @@ export function makePetUI(rt: {
         console.error('[dsh-pet] work-status 档位索引越界：state=' + workStatus.state + ' idx=' + idx);
         return;
       }
-      const name = pickSlot(slot, animRef.current); // 数组槽位档内随机抽 1，且避开当前正播动画（避免连续重复）
-      console.log(
-        '[dsh-pet] ' +
-          new Date().toTimeString().slice(0, 8) +
-          ' pet=' +
-          cfg.id +
-          ' ' +
-          (prevWorkStateRef.current ?? 'null') +
-          '->' +
-          workStatus.state +
-          '    ' +
-          name,
-      );
       const stateChanged = prevWorkStateRef.current !== workStatus.state;
+      const name = pickSlot(slot, animRef.current); // 数组槽位档内随机抽 1，且避开当前正播动画（避免连续重复）
+      if (stateChanged) {
+        console.log(
+          '[dsh-pet] ' +
+            new Date().toTimeString().slice(0, 8) +
+            ' pet=' +
+            cfg.id +
+            ' ' +
+            (prevWorkStateRef.current ?? 'null') +
+            '->' +
+            workStatus.state +
+            '    ' +
+            name,
+        );
+      }
       prevWorkStateRef.current = workStatus.state;
+      if (stateChanged) workStreakRef.current = 0; // 换档重新计数，插播节奏不跨档累积
       stopMove();
       // 气泡文本：任务详情（todo/write 提供，如"正在做 X"）优先，否则从条目级配置
       // workStatusTexts[档位]（数组）随机抽一句；整字段/整档缺失 = 不弹文本，只播动画。
@@ -445,9 +462,14 @@ export function makePetUI(rt: {
           ? window.setTimeout(() => setWorkBubbleOn(false), BUBBLE_DURATION_MS)
           : null; // 非终态：常驻，不设自动收起
       }
+      // 同档位后续 tick（仅任务文案变化，如 todo/write 刷新）：到此为止，绝不重启动画——
+      // 否则每个文案更新都会把正在播的动画从头打断（与宿主档位抖动叠加，实测大量 <1s 的打断）。
+      if (!stateChanged) return;
       // 循环语义：终态播一遍回 idle（once=true）；非终态单候选档位 once=false 无限循环；
       // 非终态多候选档位 once=true 播一遍 → ended 由 handleEnded 护栏轮换到下一候选（长时间状态不单段重复）
       const rotating = !terminal && Array.isArray(slot) && slot.length > 1;
+      animFromEventRef.current = true;
+      workInterludeRef.current = false; // 档位动画接管，作废未消费的插播标记
       setOnce(terminal || rotating);
       setAnim(name);
       // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -573,6 +595,7 @@ export function makePetUI(rt: {
       // 气泡 10s 定时消失（与动画解耦；重复触发先清旧定时器）
       if (whisperBubbleTimerRef.current !== null) window.clearTimeout(whisperBubbleTimerRef.current);
       whisperBubbleTimerRef.current = window.setTimeout(() => setWhisperBubbleOn(false), BUBBLE_DURATION_MS);
+      animFromEventRef.current = true;
       setOnce(true);
       setAnim(name);
     };
@@ -650,6 +673,7 @@ export function makePetUI(rt: {
         '[dsh-pet] ' + new Date().toTimeString().slice(0, 8) + ' pet=' + cfg.id + ' 互动结束恢复状态动画: ' + name,
       );
       // 多候选档位恢复后同样走 ended 轮换（once=true 播一遍 → 护栏换下一候选）；单候选/单动画维持无限循环
+      animFromEventRef.current = true;
       setOnce(Array.isArray(slot) && slot.length > 1);
       setAnim(name);
       return true;
@@ -662,12 +686,40 @@ export function makePetUI(rt: {
       const animations = petAnims;
       if (dragRef.current.active) return;
       // 事件动画播完：回 idle（与 drag/clicks 同分支，不进入随机链）；气泡由定时器自动消失，与动画解耦
-      const isEvent = isEventAnim(animations.events, animRef.current);
+      const isEvent = animFromEventRef.current;
+      // 插播的随机动画播完：立即回到档位循环（不进随机链，否则会一直随机下去、状态提示断档）
+      if (workInterludeRef.current) {
+        workInterludeRef.current = false;
+        if (resumeWorkStatusAnim()) return;
+      }
       // 工作状态循环护栏：非终态档位（thinking/working/result/waiting）期间，workStatus 事件动画
       // 禁止“播完回 idle”——一旦意外触发 ended（loop 被某种原因掐断/once 被误置 true），
       // 立即重设循环续播，直到状态真正切走（success/error/空闲）。其余事件动画仍按原语义回 idle。
       const wsNow = workStatusRef.current;
       if (isEvent && wsNow && wsNow.state && wsNow.state !== 'success' && wsNow.state !== 'error') {
+        // 连播计数：满 WORK_INTERLUDE_EVERY 段就插播一个随机常规动画，避免长任务里只在
+        // 这一档的候选之间来回播。插播动画由上面的 workInterludeRef 收尾回档位循环。
+        workStreakRef.current += 1;
+        if (workStreakRef.current >= WORK_INTERLUDE_EVERY) {
+          workStreakRef.current = 0;
+          const act = pickCategoryAction(animations.categories, animations.idle, facingRef.current, animRef.current);
+          console.log(
+            '[dsh-pet] ' +
+              new Date().toTimeString().slice(0, 8) +
+              ' pet=' +
+              cfg.id +
+              ' workStatus 插播随机动画: ' +
+              animRef.current +
+              ' -> ' +
+              act.name,
+          );
+          workInterludeRef.current = true;
+          animFromEventRef.current = false;
+          setAnim(act.name);
+          setOnce(true);
+          setSeq((s) => s + 1);
+          return;
+        }
         // 多候选档位：播完一段自动轮换到下一候选（排除当前段，避免连抽）——长时间状态不单段重复
         const nextWork = nextWorkStatusAnim(animations.events?.workStatus ?? [], animRef.current);
         if (nextWork !== null) {
@@ -681,6 +733,7 @@ export function makePetUI(rt: {
               ' -> ' +
               nextWork,
           );
+          animFromEventRef.current = true;
           setOnce(true); // 保持 once=true：下一段播完再 ended → 再轮换
           setAnim(nextWork);
           setSeq((s) => s + 1);
@@ -716,6 +769,7 @@ export function makePetUI(rt: {
         // 事件动画播完但 workStatus 仍处于非终态（余额/碎碎念等抢占播完）：立即恢复档位循环动画，
         // 绝不留进随机链——否则长事件期间当前状态不变（ts 不变），随机链会一直播到状态切换才被拉回
         if (resumeWorkStatusAnim()) return;
+        animFromEventRef.current = false;
         if (animations.idle.length) setAnim(pick(animations.idle, animRef.current));
         setOnce(true);
         setSeq((s) => s + 1);
@@ -729,6 +783,7 @@ export function makePetUI(rt: {
       if (animations.drag.includes(animRef.current) || animations.clicks.includes(animRef.current)) {
         // 互动动画播完：workStatus 非终态时恢复状态循环，否则回 idle（原语义）
         if (resumeWorkStatusAnim()) return;
+        animFromEventRef.current = false;
         if (animations.idle.length) setAnim(pick(animations.idle, animRef.current));
         setOnce(true);
         setSeq((s) => s + 1);
@@ -838,6 +893,7 @@ export function makePetUI(rt: {
         leadSec: mp.leadSec,
         tailSec: mp.tailSec,
       };
+      animFromEventRef.current = false;
       setOnce(true);
       setAnim(chosen.name);
       return chosen.name;
@@ -1133,6 +1189,7 @@ export function makePetUI(rt: {
         if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
         d.dragging = true;
         setDragging(true);
+        animFromEventRef.current = false;
         setOnce(true);
         if (petAnims.drag.length) {
           const name = pick(petAnims.drag);
@@ -1212,6 +1269,7 @@ export function makePetUI(rt: {
       }
       stopThrow(); // 点击飞行中的宠物 = 收手停住（再播点击回应）
       stopMove();
+      animFromEventRef.current = false;
       setOnce(true);
       if (!petAnims.clicks.length) return;
       const name = pick(petAnims.clicks);
@@ -1285,12 +1343,14 @@ export function makePetUI(rt: {
       if (petAnims.moves.actions.some((a) => a.name === leaf.anim)) {
         if (tryMove(leaf.anim) === false) {
           stopMove();
+          animFromEventRef.current = false;
           setOnce(true);
           setAnim(leaf.anim);
         }
         return;
       }
       stopMove();
+      animFromEventRef.current = false;
       setOnce(true);
       setAnim(leaf.anim);
     };

@@ -18,6 +18,7 @@ PetSprite.prototype.onWorkTick = function onWorkTick(snapshot, tick) {
   this.workState = state; // 当前工作状态：互动/事件动画播完恢复档位循环用（与浏览器 workStatusRef 同用途）
   const stateChanged = this.prevWorkState !== state;
   this.prevWorkState = state;
+  if (stateChanged) this.workStreak = 0; // 换档重新计数，插播节奏不跨档累积
   if (!state) {
     // 空闲：收起常驻气泡（动画不处理，由常规动画链回待机）
     if (this.workTimer !== null) window.clearTimeout(this.workTimer);
@@ -75,9 +76,15 @@ PetSprite.prototype.onWorkTick = function onWorkTick(snapshot, tick) {
       : null; // 非终态：常驻，不设自动收起
   }
   this.renderBubble();
+  // 同档位后续 tick（仅任务文案变化，如 todo/write 刷新）：到此为止，绝不重启动画——
+  // 否则每个文案更新都会把正在播的动画从头打断（与宿主档位抖动叠加，实测大量 <1s 的打断）。
+  // 与浏览器 pet.ts 的 stateChanged 早退同构。
+  if (!stateChanged) return;
   // 循环语义（与浏览器 setOnce 一致）：终态播一遍回 idle；非终态多候选档位播一遍 →
   // ended 由 sprite.handleEnded 轮换到下一候选（长时间状态不单段重复）；非终态单候选档位无限循环。
   const rotating = !terminal && Array.isArray(slot) && slot.length > 1;
+  this.animFromEvent = true;
+  this.workInterlude = false; // 档位动画接管，作废未消费的插播标记
   if (terminal || rotating) this.playOnce(name);
   else this.switchTo(name, false); // 进行中循环播（单动画/单候选档位）
 };
@@ -194,6 +201,7 @@ PetSprite.prototype.showWhisper = function showWhisper(text, image) {
     this.whisperOn = false;
     this.renderBubble();
   }, BUBBLE_DURATION_MS);
+  this.animFromEvent = true;
   this.playOnce(name);
 };
 
@@ -224,6 +232,7 @@ PetSprite.prototype.showBalanceNow = function showBalanceNow(state) {
     this.bubbleOn = false;
     this.renderBubble();
   }, BUBBLE_DURATION_MS);
+  this.animFromEvent = true;
   this.playOnce(name);
 };
 

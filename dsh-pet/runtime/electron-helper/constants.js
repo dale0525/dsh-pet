@@ -126,6 +126,10 @@ const TRIGGER_URL = BASE + '/balance/trigger';
 const WHISPER_URL = BASE + '/whisper';
 const WORK_STATUS_URL = BASE + '/work-status'; // 工作状态联动：1s 轮询，ts 变化才触发（与浏览器同一端点）
 const BUBBLE_DURATION_MS = 10 * 1000; // 余额/碎碎念气泡展示时长（与浏览器一致：定时自动消失，与动画解耦）
+// 工作状态非终态期间：每播满这么多段档位动画，插播一个随机常规动画。
+// 没有它的话，长任务里只会在当前档位的候选之间来回播，其余动画永远轮不到
+// （用户报告的「只有 2 个动画在循环」）。与浏览器 pet.ts WORK_INTERLUDE_EVERY 同值。
+const WORK_INTERLUDE_EVERY = 3;
 // 窗口四周外扩 = 该比例 × 宠物尺寸：为气泡 / 未来可能的弹窗预留显示空间；
 // 外扩区透明且点击穿透（只有身体命中区可交互）。单点可调——按实际观感改这里。
 const WINDOW_MARGIN_RATIO = 0.5;
